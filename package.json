@@ -7,15 +7,18 @@
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "./sample.png"
   },
   "keywords": [
+    "pi-package",
     "pi",
     "extension",
     "clarify",
     "prompt"
   ],
   "license": "MIT",
+  "author": "dkmnx",
   "files": [
     "index.ts",
     "clarify-utils.ts",
