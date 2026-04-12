@@ -1,0 +1,25 @@
+{
+  "name": "@dkmnx/pi-clarify",
+  "version": "0.1.0",
+  "description": "Prompt clarification extension for pi coding agent",
+  "type": "module",
+  "main": "./index.ts",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "keywords": [
+    "pi",
+    "extension",
+    "clarify",
+    "prompt"
+  ],
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "clarify-utils.ts",
+    "README.md",
+    "LICENSE"
+  ]
+}
