@@ -2,7 +2,7 @@
 
 Prompt clarification extension for [pi coding agent](https://github.com/mariozechner/pi-coding-agent).
 
-![Sample](sample.png)
+![Sample](assets/sample.png)
 
 ## Features
 
