@@ -98,7 +98,14 @@ export default function (pi: ExtensionAPI) {
       }),
     }),
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      if (signal?.aborted) {
+        return {
+          content: [{ type: "text", text: "Cancelled" }],
+          details: {},
+        };
+      }
+
       if (!ctx.hasUI) {
         return {
           content: [{ type: "text", text: "User prompt seems unclear: " + params.question }],
@@ -140,13 +147,13 @@ export default function (pi: ExtensionAPI) {
       };
     },
 
-    renderCall(args, theme) {
+    renderCall(args, theme, _context) {
       let text = theme.fg("toolTitle", theme.bold("clarify_prompt "));
-      text += theme.fg("muted", args.question as string);
+      text += theme.fg("muted", (args.question as string | undefined) ?? "...");
       return new Text(text, 0, 0);
     },
 
-    renderResult(result, _options, theme) {
+    renderResult(result, _options, theme, _context) {
       const details = result.details as { skipped?: boolean; answer?: string } | undefined;
       if (!details) return new Text("", 0, 0);
       if (details.skipped) {
