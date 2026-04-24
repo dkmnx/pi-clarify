@@ -20,6 +20,9 @@
     "prompt"
   ],
   "license": "MIT",
+  "dependencies": {
+    "typebox": "^1.1.24"
+  },
   "files": [
     "index.ts",
     "clarify-utils.ts",
