@@ -1,6 +1,6 @@
 {
   "name": "@dkmnx/pi-clarify",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Prompt clarification extension for pi coding agent",
   "author": "dkmnx",
   "repository": "github:dkmnx/pi-clarify",
