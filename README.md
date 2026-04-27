@@ -74,7 +74,7 @@ The extension detects these vague input patterns:
 - **Unclear outcomes**: "make it better", "improve the code"
 - **Undefined scope**: "refactor everything", "fix the tests"
 - **Missing constraints**: "just fix it", "quickly update"
-- **Very short requests**: Under 20 characters
+- **Very short requests**: Under 10 characters
 
 ## License
 

@@ -10,7 +10,7 @@ YOU MUST CALL THE \`clarify_prompt\` TOOL BEFORE RESPONDING when:
 3. Undefined scope — "refactor everything", "fix the tests" (which files? how many?)
 4. Missing constraints — No mention of backwards compatibility, performance priorities, or approach preferences
 5. Multiple valid interpretations — You can reasonably understand the request in 2+ different ways
-6. Very short requests — Under 20 characters often lack necessary context
+6. Very short requests — Under 10 characters often lack necessary context
 
 DO NOT ask for clarification in your response text.
 DO NOT say "I need more details."
@@ -98,7 +98,7 @@ const VAGUE_PATTERNS = [
 /** Check if input appears vague and needs clarification */
 export function isVagueInput(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed.length < 20) return true;
+  if (trimmed.length < 10) return true;
   return VAGUE_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
