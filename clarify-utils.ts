@@ -49,14 +49,25 @@ export function buildClarifyAgentStartResult({
   systemPrompt,
   prompt: _prompt,
   isVague,
+  systemPromptOptions,
 }: {
   enabled: boolean;
   bypassForThisTurn: boolean;
   systemPrompt: string;
   prompt: string;
   isVague: boolean;
+  systemPromptOptions?: { selectedTools?: string[] };
 }): ClarifyAgentStartResult | null {
   if (!enabled || bypassForThisTurn) {
+    return null;
+  }
+
+  // Only inject if clarify_prompt tool is in the active tool set
+  // (defensive: respects tool-scoping features from pi v0.68.0+)
+  if (
+    systemPromptOptions?.selectedTools &&
+    !systemPromptOptions.selectedTools.includes("clarify_prompt")
+  ) {
     return null;
   }
 

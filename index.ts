@@ -26,7 +26,6 @@ export { buildClarifyAgentStartResult } from "./clarify-utils";
 export type { ClarifyAgentStartResult } from "./clarify-utils";
 
 const OTHER_OPTION = "Your answer...";
-const TOOL_MODE_METADATA_EVENT = "mode-toggles:tool-metadata";
 
 export default function (pi: ExtensionAPI) {
   let enabled = true;
@@ -34,10 +33,8 @@ export default function (pi: ExtensionAPI) {
   let lastInputWasVague = false;
 
   pi.on("session_start", async () => {
-    pi.events.emit(TOOL_MODE_METADATA_EVENT, {
-      toolName: "clarify_prompt",
-      metadata: { readOnlySafe: true, sideEffects: "none" },
-    });
+    bypassNextTurn = false;
+    lastInputWasVague = false;
   });
 
   pi.registerCommand("clarify", {
@@ -75,6 +72,7 @@ export default function (pi: ExtensionAPI) {
       systemPrompt: event.systemPrompt,
       prompt: event.prompt,
       isVague: lastInputWasVague,
+      systemPromptOptions: (event as any).systemPromptOptions,
     });
 
     bypassNextTurn = false;
@@ -103,6 +101,7 @@ export default function (pi: ExtensionAPI) {
         return {
           content: [{ type: "text", text: "Cancelled" }],
           details: {},
+          terminate: true,
         };
       }
 
@@ -110,6 +109,7 @@ export default function (pi: ExtensionAPI) {
         return {
           content: [{ type: "text", text: "User prompt seems unclear: " + params.question }],
           details: {},
+          terminate: true,
         };
       }
 
@@ -123,6 +123,7 @@ export default function (pi: ExtensionAPI) {
         return {
           content: [{ type: "text", text: "User cancelled." }],
           details: { skipped: true },
+          terminate: true,
         };
       }
 
@@ -133,17 +134,20 @@ export default function (pi: ExtensionAPI) {
           return {
             content: [{ type: "text", text: "User cancelled." }],
             details: { skipped: true },
+            terminate: true,
           };
         }
         return {
           content: [{ type: "text", text: `User answered: ${custom.trim()}` }],
           details: { answer: custom.trim(), wasOther: true },
+          terminate: true,
         };
       }
 
       return {
         content: [{ type: "text", text: `User answered: ${selected}` }],
         details: { answer: selected, wasOther: false },
+        terminate: true,
       };
     },
 
