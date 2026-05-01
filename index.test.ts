@@ -57,7 +57,6 @@ function runTests() {
           enabled: true,
           bypassForThisTurn: false,
           systemPrompt,
-          prompt: "fix it",
           isVague: false,
         });
 
@@ -79,7 +78,6 @@ function runTests() {
           enabled: false,
           bypassForThisTurn: false,
           systemPrompt: "Base",
-          prompt: "fix it",
           isVague: false,
         });
         if (result !== null) {
@@ -94,7 +92,6 @@ function runTests() {
           enabled: true,
           bypassForThisTurn: true,
           systemPrompt: "Base",
-          prompt: "fix it",
           isVague: false,
         });
         if (result !== null) {
@@ -109,7 +106,6 @@ function runTests() {
           enabled: true,
           bypassForThisTurn: false,
           systemPrompt: "Base",
-          prompt: "fix it",
           isVague: true,
         });
 
@@ -134,7 +130,6 @@ function runTests() {
           enabled: true,
           bypassForThisTurn: false,
           systemPrompt: "Base",
-          prompt: "Add a user authentication system with login and signup endpoints",
           isVague: false,
         });
 

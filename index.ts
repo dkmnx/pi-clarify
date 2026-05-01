@@ -27,6 +27,27 @@ export type { ClarifyAgentStartResult } from "./clarify-utils";
 
 const OTHER_OPTION = "Your answer...";
 
+function buildResponse(text: string, details: Record<string, unknown>) {
+  return {
+    content: [{ type: "text" as const, text }],
+    details,
+    terminate: true,
+  };
+}
+
+function ensureOtherOption(options: string[]): string[] {
+  return options.includes(OTHER_OPTION) ? options : [...options, OTHER_OPTION];
+}
+
+async function handleCustomInput(
+  question: string,
+  ctx: { ui: { input: (q: string, p: string) => Promise<string | undefined> } },
+): Promise<string | null> {
+  const custom = await ctx.ui.input(question, "");
+  if (custom === undefined || custom.trim() === "") return null;
+  return custom.trim();
+}
+
 export default function (pi: ExtensionAPI) {
   let enabled = true;
   let bypassNextTurn = false;
@@ -70,7 +91,6 @@ export default function (pi: ExtensionAPI) {
       enabled,
       bypassForThisTurn: bypassNextTurn,
       systemPrompt: event.systemPrompt,
-      prompt: event.prompt,
       isVague: lastInputWasVague,
       systemPromptOptions: (event as any).systemPromptOptions,
     });
@@ -98,57 +118,39 @@ export default function (pi: ExtensionAPI) {
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       if (signal?.aborted) {
-        return {
-          content: [{ type: "text", text: "Cancelled" }],
-          details: {},
-          terminate: true,
-        };
+        return buildResponse("Cancelled", {});
       }
 
       if (!ctx.hasUI) {
-        return {
-          content: [{ type: "text", text: "User prompt seems unclear: " + params.question }],
-          details: {},
-          terminate: true,
-        };
+        return buildResponse(
+          "User prompt seems unclear: " + params.question,
+          {},
+        );
       }
 
-      const choices = params.options.includes(OTHER_OPTION)
-        ? params.options
-        : [...params.options, OTHER_OPTION];
-      const selected = await ctx.ui.select(params.question, choices);
+      const selected = await ctx.ui.select(
+        params.question,
+        ensureOtherOption(params.options),
+      );
 
-      if (selected === undefined) {
-        ctx.abort();
-        return {
-          content: [{ type: "text", text: "User cancelled." }],
-          details: { skipped: true },
-          terminate: true,
-        };
-      }
-
-      if (selected === OTHER_OPTION) {
-        const custom = await ctx.ui.input(params.question, "");
-        if (custom === undefined || custom.trim() === "") {
-          ctx.abort();
-          return {
-            content: [{ type: "text", text: "User cancelled." }],
-            details: { skipped: true },
-            terminate: true,
-          };
+      if (selected === undefined || selected === OTHER_OPTION) {
+        if (selected === OTHER_OPTION) {
+          const custom = await handleCustomInput(params.question, ctx);
+          if (custom !== null) {
+            return buildResponse(`User answered: ${custom}`, {
+              answer: custom,
+              wasOther: true,
+            });
+          }
         }
-        return {
-          content: [{ type: "text", text: `User answered: ${custom.trim()}` }],
-          details: { answer: custom.trim(), wasOther: true },
-          terminate: true,
-        };
+        ctx.abort();
+        return buildResponse("User cancelled.", { skipped: true });
       }
 
-      return {
-        content: [{ type: "text", text: `User answered: ${selected}` }],
-        details: { answer: selected, wasOther: false },
-        terminate: true,
-      };
+      return buildResponse(`User answered: ${selected}`, {
+        answer: selected,
+        wasOther: false,
+      });
     },
 
     renderCall(args, theme, _context) {

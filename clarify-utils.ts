@@ -43,18 +43,25 @@ export interface ClarifyAgentStartResult {
   };
 }
 
+function buildVagueReminder() {
+  return {
+    customType: "clarify-reminder",
+    content:
+      "The user's prompt appears vague or ambiguous. Use the clarify_prompt tool to get clarification before proceeding.",
+    display: false,
+  };
+}
+
 export function buildClarifyAgentStartResult({
   enabled,
   bypassForThisTurn,
   systemPrompt,
-  prompt: _prompt,
   isVague,
   systemPromptOptions,
 }: {
   enabled: boolean;
   bypassForThisTurn: boolean;
   systemPrompt: string;
-  prompt: string;
   isVague: boolean;
   systemPromptOptions?: { selectedTools?: string[] };
 }): ClarifyAgentStartResult | null {
@@ -76,16 +83,14 @@ export function buildClarifyAgentStartResult({
   };
 
   if (isVague) {
-    result.message = {
-      customType: "clarify-reminder",
-      content:
-        "The user's prompt appears vague or ambiguous. Use the clarify_prompt tool to get clarification before proceeding.",
-      display: false,
-    };
+    result.message = buildVagueReminder();
   }
 
   return result;
 }
+
+/** Minimum character count to consider input potentially clear */
+const VAGUE_THRESHOLD = 10;
 
 /** Vague input patterns that should trigger clarification */
 const VAGUE_PATTERNS = [
@@ -109,7 +114,7 @@ const VAGUE_PATTERNS = [
 /** Check if input appears vague and needs clarification */
 export function isVagueInput(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed.length < 10) return true;
+  if (trimmed.length < VAGUE_THRESHOLD) return true;
   return VAGUE_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
