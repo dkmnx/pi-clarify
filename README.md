@@ -1,6 +1,6 @@
 # pi-clarify
 
-Prompt clarification extension for [pi coding agent](https://github.com/mariozechner/pi-coding-agent).
+Prompt clarification extension for [pi coding agent](https://github.com/earendil-works/pi-mono).
 
 ![Sample](assets/sample.png)
 

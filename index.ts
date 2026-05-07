@@ -9,9 +9,9 @@
  * Bypass: prefix prompt with `!` to skip clarification for one turn
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { Text } from "@mariozechner/pi-tui";
+import { Text } from "@earendil-works/pi-tui";
 
 import {
   isVagueInput,
@@ -91,7 +91,7 @@ export default function (pi: ExtensionAPI) {
       bypassForThisTurn: bypassNextTurn,
       systemPrompt: event.systemPrompt,
       isVague: lastInputWasVague,
-      systemPromptOptions: (event as any).systemPromptOptions,
+      systemPromptOptions: event.systemPromptOptions,
     });
 
     bypassNextTurn = false;
