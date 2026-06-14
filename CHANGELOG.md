@@ -24,9 +24,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Extracted prompt constants and clarified result types to `clarify-utils.ts` for testability.
-- Refactored `buildClarifyAgentStartResult` interface.
+- Updated extension API usage for pi v0.71.0 compatibility.
 
 ## [0.1.6] - 2026-04-21
+
+### Changed
+
+- Lowered very-short-request threshold from 20 to 10 characters.
+
+## [0.1.5] - 2026-04-20
+
+### Fixed
+
+- Migrated from `@sinclair/typebox` to `typebox` v1.x.
+
+## [0.1.4] - 2026-04-19
+
+### Added
+
+- Signal cancellation support for tool execution.
+- Context-aware tool renderers for clarify_prompt call/result display.
+
+## [0.1.3] - 2026-04-18
+
+### Changed
+
+- Updated package metadata for npm registry compatibility.
+- Moved sample image to `assets/` folder.
+
+## [0.1.2] - 2026-04-17
 
 ### Added
 
@@ -36,6 +62,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/clarify` toggle command.
 - `!` bypass prefix.
 
+[0.1.9]: https://github.com/dkmnx/pi-clarify/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/dkmnx/pi-clarify/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/dkmnx/pi-clarify/compare/v0.1.6...v0.1.7
-[0.1.6]: https://github.com/dkmnx/pi-clarify/releases/tag/v0.1.6
+[0.1.6]: https://github.com/dkmnx/pi-clarify/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/dkmnx/pi-clarify/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/dkmnx/pi-clarify/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/dkmnx/pi-clarify/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/dkmnx/pi-clarify/releases/tag/v0.1.2
