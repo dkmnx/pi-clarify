@@ -41,7 +41,9 @@ function ensureOtherOption(options: string[]): string[] {
 async function handleCustomInput(
   question: string,
   ctx: { ui: { input: (q: string, p: string) => Promise<string | undefined> } },
+  signal?: AbortSignal,
 ): Promise<string | null> {
+  if (signal?.aborted) return null;
   const custom = await ctx.ui.input(question, "");
   if (custom === undefined || custom.trim() === "") return null;
   return custom.trim();
@@ -134,7 +136,7 @@ export default function (pi: ExtensionAPI) {
 
       if (selected === undefined || selected === OTHER_OPTION) {
         if (selected === OTHER_OPTION) {
-          const custom = await handleCustomInput(params.question, ctx);
+          const custom = await handleCustomInput(params.question, ctx, signal);
           if (custom !== null) {
             return buildResponse(`User answered: ${custom}`, {
               answer: custom,

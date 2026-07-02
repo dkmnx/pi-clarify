@@ -9,7 +9,7 @@ import {
   shouldBypassClarify,
   stripClarifyBypassPrefix,
   isVagueInput,
-} from "./clarify-utils";
+} from "./clarify-utils.ts";
 
 interface TestCase {
   name: string;
