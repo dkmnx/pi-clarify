@@ -10,7 +10,7 @@ YOU MUST CALL THE \`clarify_prompt\` TOOL BEFORE RESPONDING when:
 3. Undefined scope — "refactor everything", "fix the tests" (which files? how many?)
 4. Missing constraints — No mention of backwards compatibility, performance priorities, or approach preferences
 5. Multiple valid interpretations — You can reasonably understand the request in 2+ different ways
-6. Very short requests — Under 10 characters often lack necessary context
+6. Very short requests — Extremely brief prompts may lack context, but do not clarify solely because of length. Consider conversation history and whether the request is actionable as written.
 
 DO NOT ask for clarification in your response text.
 DO NOT say "I need more details."
@@ -89,33 +89,13 @@ export function buildClarifyAgentStartResult({
   return result;
 }
 
-/** Minimum character count to consider input potentially clear */
-const VAGUE_THRESHOLD = 10;
-
-/** Vague input patterns that should trigger clarification */
-const VAGUE_PATTERNS = [
-  // Ambiguous referents
-  /\b(fix it|this is broken|the bug|the issue|the problem|that thing)\b/i,
-  /\b(optimize|refactor|improve|update|clean up|fix)\s+(this|that|it|the code|the config|the file)\b/i,
-  /\b(do it|make it work|handle it|take care of it)\b/i,
-  // Unclear outcomes
-  /\b(make it better|improve the code|clean this up|optimize this|enhance it)\b/i,
-  /\b(should be|needs to be)\s+(better|faster|cleaner|good)\b/i,
-  // Undefined scope
-  /\b(refactor everything|fix all|update all|change everything)\b/i,
-  /\b(fix the tests|update the tests|check the tests)\b/i,
-  /\b(in the codebase|across the project|everywhere)\b/i,
-  // Missing constraints
-  /\b(just|simply|quickly)\s+(fix|update|change|refactor)\b/i,
-  // Generic requests without specifics
-  /^(fix|update|refactor|improve|optimize|clean|check|review)\s*$/i,
-];
-
-/** Check if input appears vague and needs clarification */
+/** Check if input is structurally empty and therefore unactionable */
 export function isVagueInput(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed.length < VAGUE_THRESHOLD) return true;
-  return VAGUE_PATTERNS.some((pattern) => pattern.test(trimmed));
+  if (trimmed.length === 0) return true;
+  if (trimmed.length === 1) return true;
+  if (/^[?.!…]+$/.test(trimmed)) return true;
+  return false;
 }
 
 /** Check if input should bypass clarify for one turn */

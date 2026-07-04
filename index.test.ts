@@ -185,103 +185,47 @@ function runTests() {
     },
     // isVagueInput tests
     {
-      name: "isVagueInput: short inputs are vague",
+      name: "isVagueInput: empty or whitespace is vague",
       run: () => {
-        if (!isVagueInput("fix it")) throw new Error("Expected 'fix it' to be vague");
-        if (!isVagueInput("what?")) throw new Error("Expected 'what?' to be vague");
-        if (!isVagueInput("ok")) throw new Error("Expected 'ok' to be vague");
+        if (!isVagueInput("")) throw new Error("Expected '' to be vague");
+        if (!isVagueInput("   ")) throw new Error("Expected whitespace to be vague");
+      },
+    },
+    {
+      name: "isVagueInput: single character is vague",
+      run: () => {
         if (!isVagueInput("x")) throw new Error("Expected 'x' to be vague");
-        if (isVagueInput("Add user authentication with login and signup endpoints")) {
-          throw new Error("Expected detailed prompt to NOT be vague");
+        if (!isVagueInput("?")) throw new Error("Expected '?' to be vague");
+      },
+    },
+    {
+      name: "isVagueInput: pure punctuation is vague",
+      run: () => {
+        const cases = ["?", "!", "?!", "...", "……"];
+        for (const text of cases) {
+          if (!isVagueInput(text)) {
+            throw new Error(`Expected '${text}' to be vague`);
+          }
         }
       },
     },
     {
-      name: "isVagueInput: ambiguous referents are vague",
+      name: "isVagueInput: short but actionable inputs are not auto-flagged",
       run: () => {
         const cases = [
+          "yes",
+          "ok",
+          "git push",
+          "npm test",
+          "cargo build",
+          "what?",
           "fix it",
-          "this is broken",
-          "the bug",
-          "the issue",
-          "the problem",
-          "that thing",
-          "optimize this",
-          "refactor that",
-          "update the config",
-          "improve it",
-          "do it",
-          "make it work",
-          "handle it",
-        ];
-        for (const text of cases) {
-          if (!isVagueInput(text)) {
-            throw new Error(`Expected '${text}' to be vague`);
-          }
-        }
-      },
-    },
-    {
-      name: "isVagueInput: unclear outcomes are vague",
-      run: () => {
-        const cases = [
-          "make it better",
-          "improve the code",
-          "clean this up",
-          "optimize this",
-          "enhance it",
-          "should be better",
-          "needs to be faster",
-        ];
-        for (const text of cases) {
-          if (!isVagueInput(text)) {
-            throw new Error(`Expected '${text}' to be vague`);
-          }
-        }
-      },
-    },
-    {
-      name: "isVagueInput: undefined scope is vague",
-      run: () => {
-        const cases = [
           "refactor everything",
-          "fix all",
-          "update all",
-          "change everything",
-          "fix the tests",
-          "update the tests",
-          "check the tests",
+          "make it better",
         ];
         for (const text of cases) {
-          if (!isVagueInput(text)) {
-            throw new Error(`Expected '${text}' to be vague`);
-          }
-        }
-      },
-    },
-    {
-      name: "isVagueInput: missing constraints are vague",
-      run: () => {
-        const cases = [
-          "just fix it",
-          "simply update it",
-          "quickly change",
-          "just refactor",
-        ];
-        for (const text of cases) {
-          if (!isVagueInput(text)) {
-            throw new Error(`Expected '${text}' to be vague`);
-          }
-        }
-      },
-    },
-    {
-      name: "isVagueInput: generic single-word requests are vague",
-      run: () => {
-        const cases = ["fix", "update", "refactor", "improve", "optimize", "clean", "check", "review"];
-        for (const text of cases) {
-          if (!isVagueInput(text)) {
-            throw new Error(`Expected '${text}' to be vague`);
+          if (isVagueInput(text)) {
+            throw new Error(`Expected '${text}' to NOT be vague`);
           }
         }
       },
