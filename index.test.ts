@@ -142,19 +142,19 @@ function runTests() {
       },
     },
     {
-      name: "shouldBypassClarify: detects ! prefix",
+      name: "shouldBypassClarify: detects ~ prefix",
       run: () => {
-        if (!shouldBypassClarify("!fix it")) {
-          throw new Error("Expected !fix it to trigger bypass");
+        if (!shouldBypassClarify("~fix it")) {
+          throw new Error("Expected ~fix it to trigger bypass");
         }
-        if (!shouldBypassClarify("! fix it")) {
-          throw new Error("Expected ! fix it to trigger bypass");
+        if (!shouldBypassClarify("~ fix it")) {
+          throw new Error("Expected ~ fix it to trigger bypass");
         }
         if (shouldBypassClarify("fix it")) {
           throw new Error("Expected fix it to NOT trigger bypass");
         }
-        if (shouldBypassClarify("what!")) {
-          throw new Error("Expected what! to NOT trigger bypass (not at start)");
+        if (shouldBypassClarify("what~")) {
+          throw new Error("Expected what~ to NOT trigger bypass (not at start)");
         }
       },
     },
@@ -170,13 +170,13 @@ function runTests() {
       },
     },
     {
-      name: "stripClarifyBypassPrefix removes leading ! only",
+      name: "stripClarifyBypassPrefix removes leading ~ only",
       run: () => {
-        if (stripClarifyBypassPrefix("!fix it") !== "fix it") {
-          throw new Error("Expected leading ! to be stripped");
+        if (stripClarifyBypassPrefix("~fix it") !== "fix it") {
+          throw new Error("Expected leading ~ to be stripped");
         }
-        if (stripClarifyBypassPrefix("   ! fix it") !== "fix it") {
-          throw new Error("Expected leading whitespace and ! to be stripped");
+        if (stripClarifyBypassPrefix("   ~ fix it") !== "fix it") {
+          throw new Error("Expected leading whitespace and ~ to be stripped");
         }
         if (stripClarifyBypassPrefix("fix it") !== "fix it") {
           throw new Error("Expected non-bypassed text to stay unchanged");

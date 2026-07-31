@@ -78,8 +78,10 @@ export function buildClarifyAgentStartResult({
     return null;
   }
 
+  // Append after the base system prompt so critical base instructions keep
+  // primacy; prepending would displace them.
   const result: ClarifyAgentStartResult = {
-    systemPrompt: `${CLARIFY_PROMPT}\n\n${systemPrompt}`,
+    systemPrompt: `${systemPrompt}\n\n${CLARIFY_PROMPT}`,
   };
 
   if (isVague) {
@@ -98,9 +100,14 @@ export function isVagueInput(text: string): boolean {
   return false;
 }
 
-/** Check if input should bypass clarify for one turn */
+/** Check if input should bypass clarify for one turn.
+ *
+ * Why `~` and not `!`: pi reserves `!`/`!!` as the built-in shell-command prefix
+ * and short-circuits `!`-prefixed input in the interactive submit handler
+ * before the `input` extension event fires — so an extension can never see it.
+ * `~` is unreserved and reaches `emitInput` intact. */
 export function shouldBypassClarify(text: string): boolean {
-  return text.trimStart().startsWith("!");
+  return text.trimStart().startsWith("~");
 }
 
 /** Strip the one-turn bypass prefix before sending to the agent */

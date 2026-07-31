@@ -19,11 +19,11 @@ import {
   stripClarifyBypassPrefix,
   CLARIFY_GUIDELINES,
   buildClarifyAgentStartResult,
-} from "./clarify-utils";
+} from "./clarify-utils.js";
 
-export { CLARIFY_PROMPT } from "./clarify-utils";
-export { buildClarifyAgentStartResult } from "./clarify-utils";
-export type { ClarifyAgentStartResult } from "./clarify-utils";
+export { CLARIFY_PROMPT } from "./clarify-utils.js";
+export { buildClarifyAgentStartResult } from "./clarify-utils.js";
+export type { ClarifyAgentStartResult } from "./clarify-utils.js";
 
 const OTHER_OPTION = "Your answer...";
 
@@ -40,11 +40,11 @@ function ensureOtherOption(options: string[]): string[] {
 
 async function handleCustomInput(
   question: string,
-  ctx: { ui: { input: (q: string, p: string) => Promise<string | undefined> } },
+  ctx: { ui: { input: (q: string, p: string, opts?: { signal?: AbortSignal }) => Promise<string | undefined> } },
   signal?: AbortSignal,
 ): Promise<string | null> {
   if (signal?.aborted) return null;
-  const custom = await ctx.ui.input(question, "");
+  const custom = await ctx.ui.input(question, "", signal ? { signal } : undefined);
   if (custom === undefined || custom.trim() === "") return null;
   return custom.trim();
 }
@@ -52,11 +52,9 @@ async function handleCustomInput(
 export default function (pi: ExtensionAPI) {
   let enabled = true;
   let bypassNextTurn = false;
-  let lastInputWasVague = false;
 
   pi.on("session_start", async () => {
     bypassNextTurn = false;
-    lastInputWasVague = false;
   });
 
   pi.registerCommand("clarify", {
@@ -82,8 +80,6 @@ export default function (pi: ExtensionAPI) {
       return { action: "transform", text: stripClarifyBypassPrefix(event.text) };
     }
 
-    lastInputWasVague = isVagueInput(event.text);
-
     return { action: "continue" };
   });
 
@@ -92,12 +88,11 @@ export default function (pi: ExtensionAPI) {
       enabled,
       bypassForThisTurn: bypassNextTurn,
       systemPrompt: event.systemPrompt,
-      isVague: lastInputWasVague,
+      isVague: isVagueInput(event.prompt),
       systemPromptOptions: event.systemPromptOptions,
     });
 
     bypassNextTurn = false;
-    lastInputWasVague = false;
 
     return result ?? undefined;
   });
@@ -132,6 +127,7 @@ export default function (pi: ExtensionAPI) {
       const selected = await ctx.ui.select(
         params.question,
         ensureOtherOption(params.options),
+        signal ? { signal } : undefined,
       );
 
       if (selected === undefined || selected === OTHER_OPTION) {
