@@ -1,6 +1,6 @@
 {
   "name": "@dkmnx/pi-clarify",
-  "version": "0.1.11",
+  "version": "0.2.0",
   "description": "Prompt clarification extension for pi coding agent",
   "author": "dkmnx",
   "repository": "github:dkmnx/pi-clarify",
@@ -25,7 +25,8 @@
     "typebox": "^1.1.24"
   },
   "scripts": {
-    "test": "node --import tsx index.test.ts"
+    "test": "node --import tsx index.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "files": [
     "index.ts",
@@ -35,6 +36,10 @@
     "LICENSE"
   ],
   "devDependencies": {
-    "tsx": "^4.22.4"
+    "@earendil-works/pi-coding-agent": "^0.83.0",
+    "@earendil-works/pi-tui": "^0.83.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3"
   }
 }

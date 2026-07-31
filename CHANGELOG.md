@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.0] - Unreleased
+
+### Fixed
+
+- **Bypass prefix changed from `!` to `~`.** pi reserves `!`/`!!` as the built-in shell-command prefix and short-circuits it in the interactive submit handler before the extension's `input` event fires, so the `!` bypass never actually reached the extension. `~` is unreserved and works.
+- Propagate abort signal into `ui.select` and `ui.input` dialogs (previously only checked before the call; in-flight dialogs couldn't be cancelled by a streaming abort).
+- Eliminated stale `lastInputWasVague` cross-handler state by computing vagueness from `event.prompt` inside `before_agent_start`.
+- Append `CLARIFY_PROMPT` after the base system prompt instead of prepending, so critical base instructions keep primacy.
+- Standalone `tsc --noEmit` now passes: added `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`, `@types/node`, and `typescript` as devDependencies; enabled `allowImportingTsExtensions`; added `typecheck` script; fixed extensionless relative imports to use `.js`.
+
+### Changed
+
+- README now accurately describes detection as LLM-driven (via injected system-prompt guideline) with a minimal structural guard, replacing stale claims of keyword matching and a 10-character threshold.
+
 ## [v0.1.11] - 2026-07-04
 
 ### Fixed
@@ -75,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/clarify` toggle command.
 - `!` bypass prefix.
 
+[v0.2.0]: https://github.com/dkmnx/pi-clarify/compare/v0.1.11...v0.2.0
 [v0.1.11]: https://github.com/dkmnx/pi-clarify/compare/v0.1.10...v0.1.11
 [v0.1.10]: https://github.com/dkmnx/pi-clarify/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/dkmnx/pi-clarify/compare/v0.1.8...v0.1.9
