@@ -6,7 +6,12 @@
  * suggested clarifications plus an "Other" option for freeform input.
  *
  * Toggle: /clarify on|off
- * Bypass: prefix prompt with `!` to skip clarification for one turn
+ * Bypass: prefix prompt with `~` to skip clarification for one turn
+ *
+ * Network/proxy handling: when a tool fails with a network, proxy,
+ * connectivity, or rate-limit error, the system prompt instructs the model
+ * to stop and ask the user how to proceed via clarify_prompt instead of
+ * silently retrying or switching approaches.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -19,6 +24,8 @@ import {
   stripClarifyBypassPrefix,
   CLARIFY_GUIDELINES,
   buildClarifyAgentStartResult,
+  isNetworkIssueResult,
+  buildNetworkReminderResult,
 } from "./clarify-utils.js";
 
 export { CLARIFY_PROMPT } from "./clarify-utils.js";
@@ -81,6 +88,12 @@ export default function (pi: ExtensionAPI) {
     }
 
     return { action: "continue" };
+  });
+
+  pi.on("tool_result", async (event) => {
+    if (!enabled) return;
+    if (!isNetworkIssueResult(event)) return;
+    return buildNetworkReminderResult(event);
   });
 
   pi.on("before_agent_start", async (event) => {

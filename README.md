@@ -10,6 +10,7 @@ Prompt clarification extension for [pi coding agent](https://github.com/earendil
 - **Vague input detection** - Flags structurally empty input (blank, single-character, or pure punctuation) and lets the LLM judge ambiguity for everything else via an injected system-prompt guideline
 - **`/clarify` toggle** - Enable or disable clarification with `/clarify on|off`
 - **`~` bypass prefix** - Prefix prompts with `~` to skip clarification for one turn
+- **Network/proxy issue handling** - When a tool call fails with a network, proxy, connectivity, or rate-limit error, the model stops and asks the user how to proceed instead of silently retrying or switching approaches
 
 ## Installation
 
@@ -67,6 +68,20 @@ Prefix your prompt with `~` to skip clarification for one turn:
 ```
 
 > `~` is used instead of `!` because pi reserves `!`/`!!` as the built-in shell-command prefix.
+
+### Network / proxy issue handling
+
+When a tool call fails with a network, proxy, connectivity, or rate-limit error (timeout, `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `ECONNRESET`, proxy error, `429`, `502/503/504`, quota exceeded, certificate issues, …), the extension:
+
+1. Injects a `NETWORK_ISSUE_PROMPT` guideline into the system prompt telling the model to **not silently retry more than once** and to **not silently switch approaches**.
+2. Detects network/proxy error signatures in failed tool results (`tool_result` with `isError: true`) and appends a reminder that nudges the model to call `clarify_prompt` with options like:
+   - "Retry the same request"
+   - "Switch to a different proxy / network"
+   - "Wait and try again later"
+   - "Use a fallback approach / different tool"
+   - "Skip this step and continue"
+
+This behavior is governed by the same `/clarify` toggle and is disabled for RPC/print mode (no interactive UI).
 
 ## How vague input is detected
 

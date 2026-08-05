@@ -5,7 +5,10 @@
 import {
   CLARIFY_PROMPT,
   CLARIFY_GUIDELINES,
+  NETWORK_ISSUE_PROMPT,
   buildClarifyAgentStartResult,
+  buildNetworkReminderResult,
+  isNetworkIssueResult,
   shouldBypassClarify,
   stripClarifyBypassPrefix,
   isVagueInput,
@@ -247,6 +250,118 @@ function runTests() {
           if (isVagueInput(text)) {
             throw new Error(`Expected '${text.substring(0, 30)}...' to NOT be vague`);
           }
+        }
+      },
+    },
+    {
+      name: "NETWORK_ISSUE_PROMPT contains key rules",
+      run: () => {
+        if (!NETWORK_ISSUE_PROMPT.includes("Do NOT silently retry")) {
+          throw new Error("Expected prompt to forbid silent retries");
+        }
+        if (!NETWORK_ISSUE_PROMPT.includes("clarify_prompt")) {
+          throw new Error("Expected prompt to mention clarify_prompt tool");
+        }
+        if (!NETWORK_ISSUE_PROMPT.includes("Switch to a different proxy")) {
+          throw new Error("Expected prompt to suggest proxy/network options");
+        }
+      },
+    },
+    {
+      name: "isNetworkIssueResult: detects common network/proxy/rate-limit errors",
+      run: () => {
+        const cases = [
+          "curl: (28) Operation timed out",
+          "fetch failed: connect ECONNREFUSED 127.0.0.1:8080",
+          "getaddrinfo ENOTFOUND api.example.com",
+          "Error: socket hang up",
+          "ProxyError: bad gateway",
+          "429 Too Many Requests",
+          "quota exceeded",
+          "请求超时",
+          "代理连接失败",
+          "SSL certificate verify failed",
+          "ETIMEDOUT",
+          "HTTP 502 Bad Gateway",
+          "503 Service Unavailable",
+        ];
+        for (const text of cases) {
+          if (!isNetworkIssueResult({ isError: true, content: [{ type: "text", text }] })) {
+            throw new Error(`Expected '${text}' to be detected as network issue`);
+          }
+        }
+      },
+    },
+    {
+      name: "isNetworkIssueResult: ignores non-error results",
+      run: () => {
+        const result = isNetworkIssueResult({
+          isError: false,
+          content: [{ type: "text", text: "curl: (28) Operation timed out" }],
+        });
+        if (result) {
+          throw new Error("Expected non-error result NOT to be flagged");
+        }
+      },
+    },
+    {
+      name: "isNetworkIssueResult: ignores unrelated errors",
+      run: () => {
+        const cases = [
+          "SyntaxError: unexpected token",
+          "file not found: /tmp/missing.ts",
+          "Command failed: npm install (exit code 1)",
+          "TypeError: Cannot read properties of undefined",
+        ];
+        for (const text of cases) {
+          if (isNetworkIssueResult({ isError: true, content: [{ type: "text", text }] })) {
+            throw new Error(`Expected '${text}' NOT to be flagged`);
+          }
+        }
+      },
+    },
+    {
+      name: "buildClarifyAgentStartResult: injects NETWORK_ISSUE_PROMPT alongside CLARIFY_PROMPT",
+      run: () => {
+        const result = buildClarifyAgentStartResult({
+          enabled: true,
+          bypassForThisTurn: false,
+          systemPrompt: "Base",
+          isVague: false,
+        });
+        if (!result) {
+          throw new Error("Expected result when enabled");
+        }
+        if (!result.systemPrompt.includes(CLARIFY_PROMPT)) {
+          throw new Error("Expected systemPrompt to include CLARIFY_PROMPT");
+        }
+        if (!result.systemPrompt.includes(NETWORK_ISSUE_PROMPT)) {
+          throw new Error("Expected systemPrompt to include NETWORK_ISSUE_PROMPT");
+        }
+      },
+    },
+    {
+      name: "buildNetworkReminderResult appends reminder to content",
+      run: () => {
+        const content = [{ type: "text", text: "original output" }];
+        const patch = buildNetworkReminderResult({ content });
+        if (patch.content.length !== 2) {
+          throw new Error("Expected reminder to be appended");
+        }
+        if (patch.content[0].text !== "original output") {
+          throw new Error("Expected original content to be preserved");
+        }
+        if (!patch.content[1].text.includes("NETWORK/PROXY ISSUE DETECTED")) {
+          throw new Error("Expected reminder text to be appended");
+        }
+      },
+    },
+    {
+      name: "buildNetworkReminderResult handles empty content",
+      run: () => {
+        const patch = buildNetworkReminderResult({ content: undefined });
+        if (patch.content.length !== 1) {
+          throw new Error("Expected exactly one reminder entry");
         }
       },
     },
