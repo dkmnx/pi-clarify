@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-02
+
 ### Added
 
 - Network/proxy issue handling: when a tool fails with a network, proxy, connectivity, or rate-limit error (timeout, ECONNREFUSED, 429, 502/503/504, etc.), the model is instructed via system prompt and a `tool_result` reminder to ask the user how to proceed (retry / switch proxy or network / wait / fallback / skip) instead of silently retrying. Governed by the existing `/clarify` toggle; no-op in RPC/print mode.
+
+### Changed
+
+- Updated to pi `0.84.4` (was `0.83.0`) — clears `npm audit` HIGH advisories via `undici@8.9.0` and `brace-expansion` fixes; aligns `typebox` peer to `1.3.7` (requires `typebox@^1.3.7`).
+- Bumped `tsx` to `4.23.13`.
 
 ## [v0.2.0] - 2026-07-31
 
@@ -95,7 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/clarify` toggle command.
 - `!` bypass prefix.
 
-[Unreleased]: https://github.com/dkmnx/pi-clarify/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/dkmnx/pi-clarify/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dkmnx/pi-clarify/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/dkmnx/pi-clarify/compare/v0.1.11...v0.2.0
 [v0.1.11]: https://github.com/dkmnx/pi-clarify/compare/v0.1.10...v0.1.11
 [v0.1.10]: https://github.com/dkmnx/pi-clarify/compare/v0.1.9...v0.1.10
