@@ -23,6 +23,69 @@ INSTEAD: Call \`clarify_prompt\` with:
 
 Wait for the tool result. You may call \`clarify_prompt\` multiple times for different unclear aspects.`;
 
+/** Exported for testing: network/proxy issue instructions appended to system prompt */
+export const NETWORK_ISSUE_PROMPT = `╔══════════════════════════════════════════════════════════════════════════════╗
+║  NETWORK / PROXY ISSUE HANDLING                                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+When a tool call fails with a network, proxy, connectivity, or rate-limit error
+(timeout, ECONNREFUSED, ENOTFOUND, ETIMEDOUT, ECONNRESET, proxy error, 429, 502,
+503, 504, quota exceeded, certificate issues, etc.):
+
+1. Do NOT silently retry more than once.
+2. Do NOT silently switch to an alternative approach or tool.
+3. STOP and call the \`clarify_prompt\` tool to ask the user how they want to
+   proceed. Provide concrete options such as:
+   - "Retry the same request"
+   - "Switch to a different proxy / network"
+   - "Wait and try again later"
+   - "Use a fallback approach / different tool"
+   - "Skip this step and continue"
+4. Wait for the user's choice before continuing.`;
+
+/** Exported for testing: regex matching network/proxy/rate-limit error signatures */
+export const NETWORK_ERROR_PATTERN =
+  /(network|proxy|timeout|timed out|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EHOSTUNREACH|EAI_AGAIN|socket hang up|unreachable|bad gateway|rate\s*limit|quota|\b(?:429|502|503|504)\b|超时|代理|网络|连接被拒绝|curl:\s*\(\s*(7|28|35|56|60)\s*\)|\bSSL\b|certificate)/i;
+
+/** Exported for testing: true when an errored tool result looks like a network/proxy/rate-limit failure */
+export function isNetworkIssueResult(result: {
+  isError?: boolean;
+  content?: unknown;
+}): boolean {
+  if (!result.isError) return false;
+  const content = result.content;
+  let text = "";
+  if (Array.isArray(content)) {
+    const textParts = content
+      .filter(
+        (c): c is { type: string; text: string } =>
+          !!c && typeof c === "object" && (c as { type: string }).type === "text" && typeof (c as { text: unknown }).text === "string",
+      )
+      .map((c) => c.text)
+      .join("\n");
+    text = textParts || JSON.stringify(content);
+  } else if (typeof content === "string") {
+    text = content;
+  } else {
+    text = JSON.stringify(content ?? "");
+  }
+  return NETWORK_ERROR_PATTERN.test(text);
+}
+
+const NETWORK_REMINDER_TEXT = `\n\n[NETWORK/PROXY ISSUE DETECTED] This tool failed due to a network, proxy, connectivity, or rate-limit problem. Do NOT keep retrying or switch approaches silently. Call the clarify_prompt tool and ask the user which remedy they prefer (retry / switch proxy or network / wait / fallback / skip).`;
+
+/** Exported for testing: builds a tool_result patch that appends the network reminder */
+export function buildNetworkReminderResult(event: {
+  content?: Array<{ type: string; text?: string } | unknown>;
+}): { content: Array<{ type: "text"; text: string }> } {
+  return {
+    content: [
+      ...((event.content ?? []) as Array<{ type: "text"; text: string }>),
+      { type: "text", text: NETWORK_REMINDER_TEXT },
+    ],
+  };
+}
+
 /** Exported for testing: tool guidelines that appear in system prompt when tool is active */
 export const CLARIFY_GUIDELINES = [
   "STOP: If the user prompt is vague, ambiguous, or unclear, you MUST use the clarify_prompt tool FIRST.",
@@ -81,7 +144,7 @@ export function buildClarifyAgentStartResult({
   // Append after the base system prompt so critical base instructions keep
   // primacy; prepending would displace them.
   const result: ClarifyAgentStartResult = {
-    systemPrompt: `${systemPrompt}\n\n${CLARIFY_PROMPT}`,
+    systemPrompt: `${systemPrompt}\n\n${CLARIFY_PROMPT}\n\n${NETWORK_ISSUE_PROMPT}`,
   };
 
   if (isVague) {
