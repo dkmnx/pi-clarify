@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.2.0] - Unreleased
+## [Unreleased]
+
+### Added
+
+- Network/proxy issue handling: when a tool fails with a network, proxy, connectivity, or rate-limit error (timeout, ECONNREFUSED, 429, 502/503/504, etc.), the model is instructed via system prompt and a `tool_result` reminder to ask the user how to proceed (retry / switch proxy or network / wait / fallback / skip) instead of silently retrying. Governed by the existing `/clarify` toggle; no-op in RPC/print mode.
+
+## [v0.2.0] - 2026-07-31
 
 ### Fixed
 
@@ -89,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/clarify` toggle command.
 - `!` bypass prefix.
 
+[Unreleased]: https://github.com/dkmnx/pi-clarify/compare/v0.2.0...HEAD
 [v0.2.0]: https://github.com/dkmnx/pi-clarify/compare/v0.1.11...v0.2.0
 [v0.1.11]: https://github.com/dkmnx/pi-clarify/compare/v0.1.10...v0.1.11
 [v0.1.10]: https://github.com/dkmnx/pi-clarify/compare/v0.1.9...v0.1.10
