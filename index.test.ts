@@ -365,6 +365,62 @@ function runTests() {
         }
       },
     },
+    {
+      name: "isNetworkIssueResult: handles string and undefined content",
+      run: () => {
+        if (!isNetworkIssueResult({ isError: true, content: "ECONNREFUSED direct string" })) {
+          throw new Error("Expected string content to be detected");
+        }
+        if (isNetworkIssueResult({ isError: true, content: undefined })) {
+          throw new Error("Expected undefined content NOT to be flagged");
+        }
+        if (isNetworkIssueResult({ isError: true, content: null as unknown as string })) {
+          throw new Error("Expected null content NOT to be flagged");
+        }
+        if (isNetworkIssueResult({ isError: true, content: [] })) {
+          throw new Error("Expected empty array NOT to be flagged");
+        }
+      },
+    },
+    {
+      name: "isNetworkIssueResult: ignores image-only content without text",
+      run: () => {
+        const result = isNetworkIssueResult({
+          isError: true,
+          content: [{ type: "image", data: "aGVsbG8=" }],
+        });
+        if (result) {
+          throw new Error("Expected image-only content NOT to be flagged");
+        }
+        const mixed = isNetworkIssueResult({
+          isError: true,
+          content: [
+            { type: "image", data: "xxx" },
+            { type: "text", text: "proxy error" },
+          ],
+        });
+        if (!mixed) {
+          throw new Error("Expected mixed image+text with proxy to be flagged");
+        }
+      },
+    },
+    {
+      name: "isNetworkIssueResult: word boundaries for status codes and SSL",
+      run: () => {
+        const shouldNotFlag = ["line 1429", "error a502b", "xSSLx error", "14294"];
+        for (const text of shouldNotFlag) {
+          if (isNetworkIssueResult({ isError: true, content: [{ type: "text", text }] })) {
+            throw new Error(`Expected '${text}' NOT to be flagged (boundary)`);
+          }
+        }
+        const shouldFlag = ["429 Too Many Requests", "Error 502", "SSL certificate failed"];
+        for (const text of shouldFlag) {
+          if (!isNetworkIssueResult({ isError: true, content: [{ type: "text", text }] })) {
+            throw new Error(`Expected '${text}' to be flagged`);
+          }
+        }
+      },
+    },
   ];
 
   console.log("Running clarify extension tests...\n");
