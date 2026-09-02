@@ -90,8 +90,9 @@ export default function (pi: ExtensionAPI) {
     return { action: "continue" };
   });
 
-  pi.on("tool_result", async (event) => {
+  pi.on("tool_result", async (event, ctx) => {
     if (!enabled) return;
+    if (ctx.mode !== "tui" || !ctx.hasUI) return;
     if (!isNetworkIssueResult(event)) return;
     return buildNetworkReminderResult(event);
   });

@@ -45,7 +45,7 @@ When a tool call fails with a network, proxy, connectivity, or rate-limit error
 
 /** Exported for testing: regex matching network/proxy/rate-limit error signatures */
 export const NETWORK_ERROR_PATTERN =
-  /(network|proxy|timeout|timed out|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EHOSTUNREACH|EAI_AGAIN|socket hang up|unreachable|bad gateway|rate\s*limit|quota|429|502|503|504|超时|代理|网络|连接被拒绝|curl:\s*\(\s*(7|28|35|56|60)\s*\)|SSL|certificate)/i;
+  /(network|proxy|timeout|timed out|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EHOSTUNREACH|EAI_AGAIN|socket hang up|unreachable|bad gateway|rate\s*limit|quota|\b(?:429|502|503|504)\b|超时|代理|网络|连接被拒绝|curl:\s*\(\s*(7|28|35|56|60)\s*\)|\bSSL\b|certificate)/i;
 
 /** Exported for testing: true when an errored tool result looks like a network/proxy/rate-limit failure */
 export function isNetworkIssueResult(result: {
