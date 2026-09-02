@@ -14,8 +14,16 @@ Prompt clarification extension for [pi coding agent](https://github.com/earendil
 
 ## Installation
 
+From npm:
+
 ```bash
 pi install npm:@dkmnx/pi-clarify
+```
+
+From a local path (the path is added to settings without copying, so edits take effect on the next pi start — useful when developing the extension):
+
+```bash
+pi install /path/to/pi-clarify
 ```
 
 Or add directly to your `settings.json`:
