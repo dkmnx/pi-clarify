@@ -53,16 +53,31 @@ export function isNetworkIssueResult(result: {
   content?: unknown;
 }): boolean {
   if (!result.isError) return false;
-  const text = JSON.stringify(result.content ?? "");
+  const content = result.content;
+  let text = "";
+  if (Array.isArray(content)) {
+    const textParts = content
+      .filter(
+        (c): c is { type: string; text: string } =>
+          !!c && typeof c === "object" && (c as { type: string }).type === "text" && typeof (c as { text: unknown }).text === "string",
+      )
+      .map((c) => c.text)
+      .join("\n");
+    text = textParts || JSON.stringify(content);
+  } else if (typeof content === "string") {
+    text = content;
+  } else {
+    text = JSON.stringify(content ?? "");
+  }
   return NETWORK_ERROR_PATTERN.test(text);
 }
 
 const NETWORK_REMINDER_TEXT = `\n\n[NETWORK/PROXY ISSUE DETECTED] This tool failed due to a network, proxy, connectivity, or rate-limit problem. Do NOT keep retrying or switch approaches silently. Call the clarify_prompt tool and ask the user which remedy they prefer (retry / switch proxy or network / wait / fallback / skip).`;
 
 /** Exported for testing: builds a tool_result patch that appends the network reminder */
-export function buildNetworkReminderResult<T extends { content?: unknown[] }>(
-  event: T,
-): { content: Array<{ type: "text"; text: string }> } {
+export function buildNetworkReminderResult(event: {
+  content?: Array<{ type: string; text?: string } | unknown>;
+}): { content: Array<{ type: "text"; text: string }> } {
   return {
     content: [
       ...((event.content ?? []) as Array<{ type: "text"; text: string }>),
