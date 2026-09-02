@@ -22,7 +22,7 @@
   "type": "module",
   "license": "MIT",
   "dependencies": {
-    "typebox": "^1.1.24"
+    "typebox": "^1.3.7"
   },
   "scripts": {
     "test": "node --import tsx index.test.ts",
@@ -36,10 +36,10 @@
     "LICENSE"
   ],
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.83.0",
-    "@earendil-works/pi-tui": "^0.83.0",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@earendil-works/pi-tui": "^0.84.4",
     "@types/node": "^22.0.0",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.13",
     "typescript": "^5.9.3"
   }
 }
