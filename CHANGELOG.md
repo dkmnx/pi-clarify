@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **[BREAKING]:** Requires pi 1.0.0 or newer. Clarification and network-issue guidance now arrives as a structured `clarify` system-prompt section, a capability older hosts lack; there the extension loads but injects no guidance.
+- **[BREAKING]:** Requires pi 1.0.0 or newer. Clarification and network-issue guidance now arrives as a structured `clarify` system-prompt section, a capability older hosts lack; there the extension loads but injects no guidance. It now reports the requirement explicitly rather than failing with an opaque error that left clarification silently disabled.
 - `clarify_prompt` registers with `exposure: "model-only"`, so no other tool can call it and open a blocking clarification dialog.
 - `typebox` is declared as a peer dependency so pi's copy is used instead of a nested duplicate.
 - The `~` bypass marker no longer triggers when followed by a path, so prompts beginning `~/…`, `~user/…` or `~\…` pass through untouched instead of being rewritten to a root-relative path. Windows separators count too, which matters because pi renders its cwd that way.

@@ -16,6 +16,8 @@ Prompt clarification extension for [pi coding agent](https://github.com/earendil
 
 pi `1.0.0` or newer. The extension injects its instructions as a structured system-prompt section and registers `clarify_prompt` with `exposure: "model-only"`, both of which require pi 1.0.0.
 
+On an older host the extension reports `pi-clarify requires pi 1.0.0 or newer` once per turn instead of failing silently, so a stale host is obvious rather than leaving clarification quietly disabled.
+
 ## Installation
 
 From npm:
