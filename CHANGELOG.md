@@ -7,29 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.4.0] - 2026-10-04
+
 ### Changed
 
-- **[BREAKING]:** Requires pi 1.0.0 or newer. Clarification and network-issue guidance now arrives as a structured `clarify` system-prompt section, a capability older hosts lack; there the extension loads but injects no guidance. It now reports the requirement explicitly rather than failing with an opaque error that left clarification silently disabled.
-- `clarify_prompt` registers with `exposure: "model-only"`, so no other tool can call it and open a blocking clarification dialog.
-- `typebox` is declared as a peer dependency so pi's copy is used instead of a nested duplicate.
-- The `~` bypass marker no longer triggers when followed by a path, so prompts beginning `~/…`, `~user/…` or `~\…` pass through untouched instead of being rewritten to a root-relative path. Windows separators count too, which matters because pi renders its cwd that way.
+- **[BREAKING]:** Requires pi 1.0.0 or newer. Clarification and network-issue guidance is delivered as a structured `clarify` system-prompt section rather than by replacing the whole system prompt. On an older host the extension reports `pi-clarify requires pi 1.0.0 or newer` instead of quietly injecting nothing.
+- `clarify_prompt` is registered with `exposure: "model-only"`, so no other tool can invoke it and open a blocking clarification dialog.
+- `typebox` and the pi packages are declared as peer dependencies so the host's copies are used instead of nested duplicates.
+- The `~` bypass marker is ignored when followed by a path, so prompts beginning `~/…`, `~user/…` or `~\…` reach the agent intact rather than being rewritten to a root-relative path.
 
 ### Fixed
 
-- A prompt submitted while the agent is streaming no longer strands the one-turn bypass. A new input now invalidates any bypass still pending, so one that never reached a turn expires instead of suppressing a later prompt. This also covers `steer`/`followUp` submitted while idle, which reach the input event with `streamingBehavior` blanked and are indistinguishable from a fresh prompt.
-- The one-turn bypass now survives prompt-template and skill-command expansion, which rewrites the prompt after the input handlers run and previously caused the bypass to be silently dropped.
-- `/clarify off` now stops `clarify_prompt` from opening a dialog. The tool stayed registered when clarification was disabled, so the model could still block on a prompt the user had turned off.
-- Network-error detection no longer fires on unrelated failures that merely share vocabulary: `timeout value 500`, `src/api.ts:502`, `network is not defined`, `cannot find module 'proxy-handler'`, `rateLimit is not a function`, `Disk quota exceeded`, `1 error in 500 ms`, `error code 500`, `429 passing` and `test timed out` are no longer reported as network problems. A status code or timeout now has to arrive with a status, network or API term rather than on its own.
-- Network-error detection now catches common real failures it previously missed, including `fetch failed`, `curl: (6) Could not resolve host`, `connect: connection refused`, `rate_limit_exceeded`, `TooManyRequests`, `TLS handshake failed`, `overloaded_error`, `ERR_TUNNEL_CONNECTION_FAILED`, `EPROTO`, gRPC `UNAVAILABLE`, `net::ERR_INTERNET_DISCONNECTED`, DNS resolution failures and a bare `429` or `503`.
-- Windows DNS failures (`No such host is known`, `Name or service not known`) are now recognised. That is the dominant spelling on Windows and was previously missed entirely.
-- Network-error detection no longer degrades quadratically on large single-line tool results. Bounding the status-code lookaheads takes a 200 KB result from several seconds to under a millisecond, so a big payload no longer stalls the UI.
-- The network reminder no longer discards a tool's `structuredContent`. pi drops it when a handler replaces content without also replacing it, so the original is echoed back and the tool's structured output survives. The reminder is now composed where pi types the tool result, so the patch needs no type assertion and image content in a tool result is no longer narrowed away.
+- The one-turn bypass is invalidated by any later input, so a bypass left pending by input queued during streaming, by `steer`/`followUp` submitted while idle, or by a turn that failed before starting no longer suppresses a subsequent prompt. It also survives prompt-template and skill-command expansion, which rewrites the prompt after the input handlers run.
+- `/clarify off` stops `clarify_prompt` from opening a dialog, instead of only withholding the guidance while leaving the tool callable.
+- Network-error detection no longer reports unrelated failures that merely share vocabulary, such as `timeout value 500`, `src/api.ts:502`, `network is not defined`, `cannot find module 'proxy-handler'`, `rateLimit is not a function`, `Disk quota exceeded`, `1 error in 500 ms`, `429 passing` and `test timed out`. A status code or timeout now has to appear alongside a status, network or API term.
+- Network-error detection recognizes `fetch failed`, `curl: (6) Could not resolve host`, `connect: connection refused`, `rate_limit_exceeded`, `TooManyRequests`, `TLS handshake failed`, `overloaded_error`, `ERR_TUNNEL_CONNECTION_FAILED`, `EPROTO`, gRPC `UNAVAILABLE`, `net::ERR_INTERNET_DISCONNECTED`, DNS resolution failures, a bare `429` or `503`, and the Windows spellings `No such host is known` and `Name or service not known`.
+- Network-error detection stays linear on large single-line tool results: a 200 KB result that previously took several seconds now matches in under 10 ms, so a big payload no longer stalls the UI.
+- The network reminder keeps a tool's `structuredContent`, which pi drops whenever a handler replaces content without also replacing it, and passes image content through untouched.
 
-### Added
-
-- `e2e.test.ts`: loads the extension through pi's own loader and drives the real `ExtensionRunner`, covering prompt-section injection, tool exposure, the `~` bypass, the queued-input path, structured-content preservation and the disabled-tool guard.
-
-## [0.3.0] - 2026-09-02
+## [v0.3.0] - 2026-09-02
 
 ### Added
 
@@ -67,7 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Abort signal propagation to custom input handler for proper cancellation during clarification.
 - Added `type: module` to package.json for Node.js ESM compatibility.
 
-## [0.1.9] - 2026-05-08
+## [v0.1.9] - 2026-05-08
 
 ### Changed
 
@@ -75,46 +71,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed `(event as any)` cast for `systemPromptOptions` — now properly typed on `BeforeAgentStartEvent`.
 - Updated README link to point at the new `earendil-works/pi-mono` repository.
 
-## [0.1.8] - 2026-05-01
+## [v0.1.8] - 2026-05-01
 
 ### Fixed
 
 - `clarify_prompt` tool now passes the user's selected answer to the LLM instead of terminating the agent, allowing it to continue with the clarified understanding.
 
-## [0.1.7] - 2026-04-25
+## [v0.1.7] - 2026-04-25
 
 ### Changed
 
 - Extracted prompt constants and clarified result types to `clarify-utils.ts` for testability.
 - Updated extension API usage for pi v0.71.0 compatibility.
 
-## [0.1.6] - 2026-04-21
+## [v0.1.6] - 2026-04-21
 
 ### Changed
 
 - Lowered very-short-request threshold from 20 to 10 characters.
 
-## [0.1.5] - 2026-04-20
+## [v0.1.5] - 2026-04-20
 
 ### Fixed
 
 - Migrated from `@sinclair/typebox` to `typebox` v1.x.
 
-## [0.1.4] - 2026-04-19
+## [v0.1.4] - 2026-04-19
 
 ### Added
 
 - Signal cancellation support for tool execution.
 - Context-aware tool renderers for clarify_prompt call/result display.
 
-## [0.1.3] - 2026-04-18
+## [v0.1.3] - 2026-04-18
 
 ### Changed
 
 - Updated package metadata for npm registry compatibility.
 - Moved sample image to `assets/` folder.
 
-## [0.1.2] - 2026-04-17
+## [v0.1.2] - 2026-04-17
 
 ### Added
 
@@ -125,15 +121,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `!` bypass prefix.
 
 [Unreleased]: https://github.com/dkmnx/pi-clarify/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/dkmnx/pi-clarify/compare/v0.2.0...v0.3.0
+[v0.4.0]: https://github.com/dkmnx/pi-clarify/compare/v0.3.0...v0.4.0
+[v0.3.0]: https://github.com/dkmnx/pi-clarify/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/dkmnx/pi-clarify/compare/v0.1.11...v0.2.0
 [v0.1.11]: https://github.com/dkmnx/pi-clarify/compare/v0.1.10...v0.1.11
 [v0.1.10]: https://github.com/dkmnx/pi-clarify/compare/v0.1.9...v0.1.10
-[0.1.9]: https://github.com/dkmnx/pi-clarify/compare/v0.1.8...v0.1.9
-[0.1.8]: https://github.com/dkmnx/pi-clarify/compare/v0.1.7...v0.1.8
-[0.1.7]: https://github.com/dkmnx/pi-clarify/compare/v0.1.6...v0.1.7
-[0.1.6]: https://github.com/dkmnx/pi-clarify/compare/v0.1.5...v0.1.6
-[0.1.5]: https://github.com/dkmnx/pi-clarify/compare/v0.1.4...v0.1.5
-[0.1.4]: https://github.com/dkmnx/pi-clarify/compare/v0.1.3...v0.1.4
-[0.1.3]: https://github.com/dkmnx/pi-clarify/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/dkmnx/pi-clarify/releases/tag/v0.1.2
+[v0.1.9]: https://github.com/dkmnx/pi-clarify/compare/v0.1.8...v0.1.9
+[v0.1.8]: https://github.com/dkmnx/pi-clarify/compare/v0.1.7...v0.1.8
+[v0.1.7]: https://github.com/dkmnx/pi-clarify/compare/v0.1.6...v0.1.7
+[v0.1.6]: https://github.com/dkmnx/pi-clarify/compare/v0.1.5...v0.1.6
+[v0.1.5]: https://github.com/dkmnx/pi-clarify/compare/v0.1.4...v0.1.5
+[v0.1.4]: https://github.com/dkmnx/pi-clarify/compare/v0.1.3...v0.1.4
+[v0.1.3]: https://github.com/dkmnx/pi-clarify/compare/v0.1.2...v0.1.3
+[v0.1.2]: https://github.com/dkmnx/pi-clarify/releases/tag/v0.1.2
