@@ -7,10 +7,14 @@ Prompt clarification extension for [pi coding agent](https://github.com/earendil
 ## Features
 
 - **`clarify_prompt` tool** - Prompts the LLM to ask clarifying questions when user input is vague
-- **Vague input detection** - Flags structurally empty input (blank, single-character, or pure punctuation) and lets the LLM judge ambiguity for everything else via an injected system-prompt guideline
+- **Vague input detection** - Flags structurally empty input (blank, single-character, or pure punctuation) and lets the LLM judge ambiguity for everything else via an injected system-prompt section
 - **`/clarify` toggle** - Enable or disable clarification with `/clarify on|off`
 - **`~` bypass prefix** - Prefix prompts with `~` to skip clarification for one turn
 - **Network/proxy issue handling** - When a tool call fails with a network, proxy, connectivity, or rate-limit error, the model stops and asks the user how to proceed instead of silently retrying or switching approaches
+
+## Requirements
+
+pi `1.0.0` or newer. The extension injects its instructions as a structured system-prompt section and registers `clarify_prompt` with `exposure: "model-only"`, both of which require pi 1.0.0.
 
 ## Installation
 
@@ -93,13 +97,13 @@ This behavior is governed by the same `/clarify` toggle and is disabled for RPC/
 
 ## How vague input is detected
 
-Clarification is driven by the LLM, not by keyword matching. When enabled, the extension appends a `CLARIFY_PROMPT` guideline to the system prompt instructing the model to call `clarify_prompt` whenever a request is ambiguous, has unclear outcomes/scope, admits multiple valid interpretations, or is missing constraints.
+Clarification is driven by the LLM, not by keyword matching. When enabled, the extension writes a `clarify` section into pi's system-prompt options instructing the model to call `clarify_prompt` whenever a request is ambiguous, has unclear outcomes/scope, admits multiple valid interpretations, or is missing constraints. It is a structured section rather than a whole-prompt replacement, so pi records it as a transcript delta and its own prompt sections stay intact.
 
 The only client-side heuristic is a minimal structural guard: completely blank, single-character, or pure-punctuation input is flagged as vague so the model receives an extra reminder. Short but actionable commands like `git push` or `npm test` are **not** auto-flagged — the model decides based on the full conversation context.
 
 ### Example patterns the LLM is told to clarify
 
-These are examples the injected guideline tells the model to watch for (the model does the actual judgment, not the extension):
+These are examples the injected section tells the model to watch for (the model does the actual judgment, not the extension):
 
 - **Ambiguous referents**: "fix it", "this is broken", "the bug"
 - **Unclear outcomes**: "make it better", "improve the code"

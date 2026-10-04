@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **[BREAKING]:** Requires pi 1.0.0 or newer. Clarification and network-issue guidance now arrives as a structured `clarify` system-prompt section, a capability older hosts lack; there the extension loads but injects no guidance.
+- `clarify_prompt` registers with `exposure: "model-only"`, so no other tool can call it and open a blocking clarification dialog.
+- `typebox` is declared as a peer dependency so pi's copy is used instead of a nested duplicate.
+
 ## [0.3.0] - 2026-09-02
 
 ### Added
