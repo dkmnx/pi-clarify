@@ -54,9 +54,78 @@ When a tool call fails with a network, proxy, connectivity, or rate-limit error
    - "Skip this step and continue"
 4. Wait for the user's choice before continuing.`;
 
-/** Exported for testing: regex matching network/proxy/rate-limit error signatures */
-export const NETWORK_ERROR_PATTERN =
-  /(network|proxy|timeout|timed out|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EHOSTUNREACH|EAI_AGAIN|socket hang up|unreachable|bad gateway|rate\s*limit|quota|\b(?:429|502|503|504)\b|超时|代理|网络|连接被拒绝|curl:\s*\(\s*(7|28|35|56|60)\s*\)|\bSSL\b|certificate)/i;
+/** Exported for testing: regex matching network/proxy/rate-limit error signatures.
+ *
+ * Bare words are deliberately absent. `timeout`, `network`, `proxy`, `unreachable`,
+ * `quota` and the HTTP status codes all occur constantly in unrelated failures --
+ * `timeout value 500`, `src/api.ts:502`, `network is not defined` -- and matching
+ * them makes the agent abandon real work to ask about a network problem that never
+ * happened. Each source below therefore carries the context that makes it a
+ * connectivity or rate-limit signal rather than a shared word. */
+const NETWORK_ERROR_SOURCES: RegExp[] = [
+  // errno, libuv and Chromium socket codes: unambiguous on their own.
+  /\b(?:ECONNREFUSED|ECONNRESET|ECONNABORTED|ENOTFOUND|ETIMEDOUT|EPIPE|EPROTO|EHOSTUNREACH|EHOSTDOWN|ENETUNREACH|ENETDOWN|EAI_AGAIN|EAI_NONAME|EAI_FAIL)\b/,
+  /\bERR_(?:INTERNET_DISCONNECTED|NETWORK_CHANGED|NAME_NOT_RESOLVED|CONNECTION_[A-Z_]+|ADDRESS_[A-Z_]+|TUNNEL_[A-Z_]+|PROXY_[A-Z_]+|SOCKS_[A-Z_]+)\b/,
+  // Name resolution. `curl: (6)` is curl's DNS failure code. Windows reports a
+  // failed lookup as prose rather than an errno, and that spelling is the common one
+  // there, so it counts too.
+  /getaddrinfo/,
+  /\b(?:no such host is known|name or service not known)\b/i,
+  /(?:could not|cannot|can't|failed to|unable to)\s+(?:resolve|look up)\s+(?:host|name)/,
+  /\b(?:DNS|name) resolution\b/,
+  /\bDNS_PROBE_FINISHED_NXDOMAIN\b/,
+  /curl:\s*\(\s*(?:6|7|18|28|35|52|55|56|60)\s*\)/,
+  // Transport and reachability.
+  /fetch failed/,
+  /socket hang up/,
+  /\bconnection (?:refused|reset|closed|aborted|timed out)\b/,
+  /\bnetwork (?:is unreachable|error|failure|problem|issue|timeout)\b/,
+  /\bno route to host\b/,
+  /\bi\/o timeout\b/,
+  /(?:unable to connect|failed to connect|could not connect)/,
+  /upstream connect error/,
+  /disconnect\/reset before headers/,
+  // gRPC reports transport failure as an availability status.
+  /\bunavailable\b[^\n]{0,24}\b(?:no connection|connectivity|refused|unreachable|established)\b/i,
+  /\bnetwork request\b[^\n]{0,60}\bfailed\b/i,
+  // TLS and certificates.
+  /\bTLS\b|\bSSL\b|handshake (?:failed|error)|certificate/i,
+  // A proxy error needs its own word so `cannot find module 'proxy-handler'` and
+  // other files named after proxies do not match.
+  /\bproxy (?:error|failure|failed|unreachable|refused)\b/i,
+  // Rate limiting. `rate limit` alone is far too weak on its own: `rateLimit is
+  // not a function` and `x-ratelimit-remaining: 0` both contain it, so it has to
+  // co-occur with the limit being hit.
+  /rate[ _-]?limit[^\n]{0,16}(?:exceed|reached|hit)/i,
+  /too[ _-]?many[ _-]?requests/i,
+  /\boverloaded_error\b/i,
+  // `Disk quota exceeded` and `API quota exceeded` differ only in the words around
+  // them, so quota counts only next to an API, billing or usage term.
+  /\b(?:api|key|token|model|billing|plan|usage|request|account|credit)[^\n]{0,40}\bquota\b|\bquota\b[^\n]{0,40}\b(?:api|key|token|model|billing|plan|usage|request|account|credit)\b/i,
+  // A bare HTTP status counts only when the line is essentially just a status, or is
+  // introduced by an explicit status word. Everywhere else `at position 429`,
+  // `api.ts:502` and `1 error in 500 ms` are indistinguishable from a real status,
+  // and flagging those aborts real work over a phantom network problem. Every
+  // lookahead here is bounded, so a result with thousands of status-shaped numbers
+  // stays linear instead of stalling the UI.
+  /^\s*(?:HTTP\/[\d.]+\s+)?[45]\d\d\b(?:\s+(?:bad|gateway|service|too|internal|upstream)\b|\s*$)/im,
+  /^\s*(?:error|err)\s*:?\s*[45]\d\d\b(?:\s+(?:bad|gateway|service|too|internal|upstream)\b|\s*$)/im,
+  /\b(?:status|statuscode|status_code|http|https)\b[^\n]{0,12}\b[45]\d\d\b/i,
+  /\b[45]\d\d\b(?=[^\n]{0,120}?\b(?:status|throttl|too many|overload|gateway)\b)/i,
+  /bad gateway|service unavailable|gateway timeout|request timeout/i,
+  // A timeout only counts when something network-shaped precedes it, so a test
+  // suite reporting `test timed out` is not mistaken for a dead connection.
+  /\b(?:request|connection|socket|connect|fetch|handshake|operation|dns|lookup|curl|endpoint)\b[^\n]{0,24}\b(?:timed out|timeout (?:of|exceeded|after))\b/i,
+  /(?:canceled|cancelled|aborted|failed) (?:due to|after) (?:an? )?timeout/i,
+  // Non-English environments.
+  /代理|网络|超时|连接被拒绝/,
+];
+
+/** Exported for testing: matches any network, proxy, or rate-limit failure signature */
+export const NETWORK_ERROR_PATTERN = new RegExp(
+  NETWORK_ERROR_SOURCES.map((source) => `(?:${source.source})`).join("|"),
+  "im",
+);
 
 /** Exported for testing: true when an errored tool result looks like a network/proxy/rate-limit failure */
 export function isNetworkIssueResult(result: {
@@ -83,19 +152,9 @@ export function isNetworkIssueResult(result: {
   return NETWORK_ERROR_PATTERN.test(text);
 }
 
-const NETWORK_REMINDER_TEXT = `\n\n[NETWORK/PROXY ISSUE DETECTED] This tool failed due to a network, proxy, connectivity, or rate-limit problem. Do NOT keep retrying or switch approaches silently. Call the clarify_prompt tool and ask the user which remedy they prefer (retry / switch proxy or network / wait / fallback / skip).`;
-
-/** Exported for testing: builds a tool_result patch that appends the network reminder */
-export function buildNetworkReminderResult(event: {
-  content?: Array<{ type: string; text?: string } | unknown>;
-}): { content: Array<{ type: "text"; text: string }> } {
-  return {
-    content: [
-      ...((event.content ?? []) as Array<{ type: "text"; text: string }>),
-      { type: "text", text: NETWORK_REMINDER_TEXT },
-    ],
-  };
-}
+/** Exported for testing: appended to a failed tool result when the failure looks like
+ * a network, proxy or rate-limit problem. */
+export const NETWORK_REMINDER_TEXT = `\n\n[NETWORK/PROXY ISSUE DETECTED] This tool failed due to a network, proxy, connectivity, or rate-limit problem. Do NOT keep retrying or switch approaches silently. Call the clarify_prompt tool and ask the user which remedy they prefer (retry / switch proxy or network / wait / fallback / skip).`;
 
 /** Exported for testing: tool guidelines that appear in system prompt when tool is active */
 export const CLARIFY_GUIDELINES = [
@@ -182,9 +241,16 @@ export function isVagueInput(text: string): boolean {
  * Why `~` and not `!`: pi reserves `!`/`!!` as the built-in shell-command prefix
  * and short-circuits `!`-prefixed input in the interactive submit handler
  * before the `input` extension event fires — so an extension can never see it.
- * `~` is unreserved and reaches `emitInput` intact. */
+ * `~` is unreserved and reaches `emitInput` intact.
+ *
+ * The marker cannot be followed by a path. pi's own footer renders the cwd as
+ * `~/…` on Unix and `~\…` on Windows, so a prompt beginning with a path is
+ * routine; consuming that tilde would rewrite it to a root-relative path.
+ * `~user/…` is excluded for the same reason.
+ */
 export function shouldBypassClarify(text: string): boolean {
-  return text.trimStart().startsWith("~");
+  const trimmed = text.trimStart();
+  return trimmed.startsWith("~") && !/^~\w*[\\/]/.test(trimmed);
 }
 
 /** Strip the one-turn bypass prefix before sending to the agent */

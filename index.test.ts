@@ -8,7 +8,6 @@ import {
   CLARIFY_SECTION_NAME,
   NETWORK_ISSUE_PROMPT,
   buildClarifyAgentStartResult,
-  buildNetworkReminderResult,
   isNetworkIssueResult,
   shouldBypassClarify,
   stripClarifyBypassPrefix,
@@ -271,6 +270,44 @@ function runTests() {
         }
       },
     },
+    {
+      name: "shouldBypassClarify: leaves home-relative paths alone",
+      run: () => {
+        // pi's own footer renders cwd as ~/Documents/..., so prompts starting with
+        // "~/..." are routine. Treating them as a bypass corrupts the path.
+        for (const p of ["~/project", "~/.bashrc", "~/", "~user/foo", "  ~/notes.md"]) {
+          if (shouldBypassClarify(p)) {
+            throw new Error(`Expected '${p}' to NOT trigger bypass`);
+          }
+          const stripped = stripClarifyBypassPrefix(p);
+          if (stripped !== p) {
+            throw new Error(`Expected '${p}' to survive intact, got '${stripped}'`);
+          }
+        }
+        // Windows separator: pi's own footer renders the cwd as ~\Documents\...
+        const win = "~\\Documents\\cli\\notes.md please summarize";
+        if (shouldBypassClarify(win)) {
+          throw new Error("Expected a backslash path to NOT trigger bypass");
+        }
+        if (stripClarifyBypassPrefix(win) !== win) {
+          throw new Error(`Expected the backslash path intact, got '${stripClarifyBypassPrefix(win)}'`);
+        }
+      },
+    },
+    {
+      name: "stripClarifyBypassPrefix still works for the standalone marker",
+      run: () => {
+        if (stripClarifyBypassPrefix("~fix it") !== "fix it") {
+          throw new Error("Expected '~fix it' to strip");
+        }
+        if (stripClarifyBypassPrefix("~ fix it") !== "fix it") {
+          throw new Error("Expected '~ fix it' to strip");
+        }
+        if (stripClarifyBypassPrefix("~") !== "") {
+          throw new Error("Expected a bare '~' to strip to empty");
+        }
+      },
+    },
     // isVagueInput tests
     {
       name: "isVagueInput: empty or whitespace is vague",
@@ -362,7 +399,7 @@ function runTests() {
           "Error: socket hang up",
           "ProxyError: bad gateway",
           "429 Too Many Requests",
-          "quota exceeded",
+          "API quota exceeded for model gpt-4",
           "请求超时",
           "代理连接失败",
           "SSL certificate verify failed",
@@ -406,27 +443,97 @@ function runTests() {
       },
     },
     {
-      name: "buildNetworkReminderResult appends reminder to content",
+      name: "isNetworkIssueResult: ignores non-network errors that share vocabulary",
       run: () => {
-        const content = [{ type: "text", text: "original output" }];
-        const patch = buildNetworkReminderResult({ content });
-        if (patch.content.length !== 2) {
-          throw new Error("Expected reminder to be appended");
-        }
-        if (patch.content[0].text !== "original output") {
-          throw new Error("Expected original content to be preserved");
-        }
-        if (!patch.content[1].text.includes("NETWORK/PROXY ISSUE DETECTED")) {
-          throw new Error("Expected reminder text to be appended");
+        const notNetwork = [
+          "SyntaxError: Unexpected token } at position 429",
+          "assertion failed: timeout value 500 must be < 300",
+          "error: cannot find module 'proxy-handler'",
+          "ReferenceError: network is not defined",
+          "src/api.ts:502: export const handler = 1",
+          "no-unreachable: Unreachable 'return' statement",
+          "OSError: Disk quota exceeded",
+          "Error: expected 3 arguments, got 2",
+          "TypeError: rateLimit is not a function",
+          "x-ratelimit-remaining: 0",
+          "src/cache.ts:12 error TS2304: Cannot find name 'rateLimit'.",
+          "webpack compiled with 1 error in 500 ms",
+          "process exited with error code 500",
+          "Error: expected 500 items, see error above",
+          "  429 passing (12ms)",
+          "jest: test timed out after 5000ms",
+          "  3 tests timed out",
+          "Error: 500 units of currency, service tier gold",
+          "AssertionError: timeout of 5000ms exceeded",
+        ];
+        for (const text of notNetwork) {
+          if (isNetworkIssueResult({ isError: true, content: [{ type: "text", text }] })) {
+            throw new Error(`Expected a non-network error to NOT be flagged: ${text}`);
+          }
         }
       },
     },
     {
-      name: "buildNetworkReminderResult handles empty content",
+      name: "isNetworkIssueResult: catches common real connectivity failures",
       run: () => {
-        const patch = buildNetworkReminderResult({ content: undefined });
-        if (patch.content.length !== 1) {
-          throw new Error("Expected exactly one reminder entry");
+        const network = [
+          "TypeError: fetch failed",
+          "curl: (6) Could not resolve host: example.com",
+          "curl: (52) Empty reply from server",
+          "connect: connection refused",
+          '{"error":{"code":"rate_limit_exceeded"}}',
+          "dial tcp: i/o timeout",
+          "TLS handshake failed",
+          "Temporary failure in name resolution",
+          "getaddrinfo ENOTFOUND api.example.com",
+          "socket hang up",
+          "status code 503",
+          "ECONNREFUSED 127.0.0.1:8080",
+          "429",
+          "503",
+          "You exceeded your current quota, please check your plan and billing details.",
+          "overloaded_error",
+          "Azure deployment failed with status 'TooManyRequests'.",
+          "net::ERR_INTERNET_DISCONNECTED",
+          "systemd-resolved: DNS resolution failed for api.example.com",
+          "upstream connect error or disconnect/reset before headers",
+          "Rate limit exceeded for org",
+          "rate_limit_exceeded",
+          "No such host is known. (Name or service not known)",
+          "The operation was canceled due to timeout",
+          "npm ERR! network request to https://registry.example.com failed",
+          "net::ERR_TUNNEL_CONNECTION_FAILED",
+          "EPROTO: Protocol error",
+          "gRPC: 14 UNAVAILABLE: No connection established",
+          "HTTP/1.1 502 Bad Gateway",
+          "Error 502",
+        ];
+        for (const text of network) {
+          if (!isNetworkIssueResult({ isError: true, content: [{ type: "text", text }] })) {
+            throw new Error(`Expected a network failure to be flagged: ${text}`);
+          }
+        }
+      },
+    },
+    {
+      name: "isNetworkIssueResult stays linear on long single-line payloads",
+      run: () => {
+        // An unbounded lookahead per status-code hit made this quadratic. The
+        // status-shaped numbers must genuinely match the lookahead source (`\b429\b`
+        // needs its word boundary, and must not sit at the start of the line where an
+        // earlier source would match and short-circuit), and no status word may
+        // follow, so the whole line gets traversed.
+        const line = ("x 429 " + "a".repeat(20) + " ").repeat(8000);
+        const started = process.hrtime.bigint();
+        isNetworkIssueResult({ isError: true, content: [{ type: "text", text: line }] });
+        const ms = Number(process.hrtime.bigint() - started) / 1e6;
+        // Measured on this payload: the bounded lookahead takes 6-9ms, the unbounded
+        // one ~970ms. 300ms leaves ample room for a slow machine while still
+        // catching the regression.
+        if (ms > 300) {
+          throw new Error(
+            `Expected linear matching on a ${Math.round(line.length / 1024)}KB line, took ${Math.round(ms)}ms`,
+          );
         }
       },
     },

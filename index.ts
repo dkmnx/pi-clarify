@@ -26,7 +26,7 @@ import {
   CLARIFY_GUIDELINES,
   buildClarifyAgentStartResult,
   isNetworkIssueResult,
-  buildNetworkReminderResult,
+  NETWORK_REMINDER_TEXT,
 } from "./clarify-utils.js";
 
 export { CLARIFY_PROMPT, CLARIFY_SECTION_NAME, CLARIFY_TOOL_NAME } from "./clarify-utils.js";
@@ -83,30 +83,51 @@ export default function (pi: ExtensionAPI) {
   pi.on("input", async (event) => {
     if (event.source === "extension") return { action: "continue" };
 
-    if (shouldBypassClarify(event.text)) {
-      bypassNextTurn = true;
-      return { action: "transform", text: stripClarifyBypassPrefix(event.text) };
-    }
+    // Any new input invalidates a pending bypass. The input before it may have been
+    // queued and never consumed by a turn, and honouring that stale flag would
+    // suppress a prompt it was never meant for.
+    bypassNextTurn = false;
 
-    return { action: "continue" };
+    // Only a prompt that starts a fresh turn reaches before_agent_start. Anything
+    // queued is delivered mid-run and never consumes the flag, so honouring `~` here
+    // would only rewrite text the extension cannot act on.
+    if (event.streamingBehavior !== undefined) return { action: "continue" };
+
+    if (!shouldBypassClarify(event.text)) return { action: "continue" };
+
+    bypassNextTurn = true;
+    return { action: "transform", text: stripClarifyBypassPrefix(event.text) };
   });
 
   pi.on("tool_result", async (event, ctx) => {
     if (!enabled) return;
     if (ctx.mode !== "tui" || !ctx.hasUI) return;
     if (!isNetworkIssueResult(event)) return;
-    return buildNetworkReminderResult(event);
+    // Built here rather than in a helper because pi types event.content, so the
+    // spread needs no assertion: the earlier version took `unknown` and had to cast
+    // its way back to pi's content union.
+    const existing = Array.isArray(event.content) ? event.content : [];
+    return {
+      content: [...existing, { type: "text", text: NETWORK_REMINDER_TEXT }],
+      // pi drops structuredContent when a patch replaces content without it
+      // (runner.ts), so it has to ride along or the tool's structured output is lost.
+      ...(event.structuredContent !== undefined
+        ? { structuredContent: event.structuredContent }
+        : {}),
+      ...(event.details !== undefined ? { details: event.details } : {}),
+    };
   });
 
   pi.on("before_agent_start", async (event) => {
+    const bypassForThisTurn = bypassNextTurn;
+    bypassNextTurn = false;
+
     const result = buildClarifyAgentStartResult({
       enabled,
-      bypassForThisTurn: bypassNextTurn,
+      bypassForThisTurn,
       systemPromptOptions: event.systemPromptOptions,
       isVague: isVagueInput(event.prompt),
     });
-
-    bypassNextTurn = false;
 
     return result ?? undefined;
   });
@@ -131,6 +152,16 @@ export default function (pi: ExtensionAPI) {
     }),
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      // Toggling clarification off hides the instructions, but pi leaves the tool
+      // registered, so the model can still call it and block on a dialog the user
+      // asked not to see.
+      if (!enabled) {
+        return buildResponse(
+          "Prompt clarification is disabled. Proceed with your best interpretation and do not ask the user to clarify.",
+          { disabled: true },
+        );
+      }
+
       if (signal?.aborted) {
         return buildResponse("Cancelled", {});
       }

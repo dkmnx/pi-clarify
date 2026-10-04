@@ -16,6 +16,7 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 
 import { CLARIFY_PROMPT, CLARIFY_SECTION_NAME, CLARIFY_TOOL_NAME, NETWORK_ISSUE_PROMPT } from "./clarify-utils.ts";
 
@@ -31,6 +32,17 @@ const extensionPath = path.join(projectDir, "index.ts");
  */
 function isPiSectionName(name: string): boolean {
   return /^[a-z][a-z0-9_-]*$/.test(name) && name !== "preamble";
+}
+
+/** Stands in for the terminal so the extension's TUI-gated paths are reachable.
+ * The behaviour under test is the extension's, not the UI's. */
+function uiStub() {
+  return {
+    select: async () => undefined,
+    confirm: async () => false,
+    input: async () => undefined,
+    notify: () => {},
+  };
 }
 
 interface TestCase {
@@ -199,6 +211,179 @@ function runTests() {
 
         if (messages.length !== 0) {
           throw new Error(`Expected no messages for a clear prompt, got ${messages.length}`);
+        }
+      });
+
+      test("a ~ prefixed home path is left intact and does not bypass", async () => {
+        const input = await runner.emitInput("~/src/index.ts fails to compile", undefined, "interactive");
+        if (input.action !== "continue") {
+          throw new Error(`Expected '~/src/...' to pass through untouched, got '${input.action}'`);
+        }
+        const backslash = await runner.emitInput(
+          "~\\Documents\\notes.md summarize",
+          undefined,
+          "interactive",
+        );
+        if (backslash.action !== "continue") {
+          throw new Error(`Expected '~\\Documents\\...' to pass through untouched, got '${backslash.action}'`);
+        }
+        const { systemPromptOptions } = await emit("~/src/index.ts fails to compile");
+        if (!systemPromptOptions.sections[CLARIFY_SECTION_NAME]) {
+          throw new Error("Expected '~/src/...' to still receive the clarify section");
+        }
+      });
+
+      test("input queued while streaming does not strand the bypass on a later turn", async () => {
+        // pi queues steer/followUp input and returns before emitting
+        // before_agent_start, so a queued '~' can never be consumed there.
+        const queued = await runner.emitInput("~steered input", undefined, "interactive", "steer");
+        if (queued.action !== "continue") {
+          throw new Error("Expected queued input to pass through untouched");
+        }
+        const { systemPromptOptions } = await emit("a later ordinary prompt");
+        if (!systemPromptOptions.sections[CLARIFY_SECTION_NAME]) {
+          throw new Error(
+            "Expected the queued '~' NOT to suppress clarification on the following turn",
+          );
+        }
+      });
+
+      test("a queued-style input with no streamingBehavior cannot suppress a different prompt", async () => {
+        // steer() issued while idle reaches the input handler with streamingBehavior
+        // blanked, so nothing in the event says the prompt is queued. A later user
+        // prompt must invalidate the pending bypass.
+        await runner.emitInput("~steered input", undefined, "interactive");
+        await runner.emitInput("a later ordinary prompt", undefined, "interactive");
+        const { systemPromptOptions } = await emit("a later ordinary prompt");
+        if (!systemPromptOptions.sections[CLARIFY_SECTION_NAME]) {
+          throw new Error("Expected an unrelated prompt to still receive the clarify section");
+        }
+      });
+
+      test("a bypass survives prompt-template expansion, which rewrites the prompt", async () => {
+        // pi expands skill commands and templates after the input handlers run, so
+        // the text the agent sees is not the text the extension saw.
+        await runner.emitInput("~ /review", undefined, "interactive");
+        const { systemPromptOptions } = await emit("expanded template body");
+        if (CLARIFY_SECTION_NAME in systemPromptOptions.sections) {
+          throw new Error("Expected the bypass to survive expansion of the prompt text");
+        }
+      });
+
+      test("a bypass that never reaches a turn expires instead of suppressing the next prompt", async () => {
+        // A turn that fails before before_agent_start (missing credentials, say)
+        // leaves the bypass pending with no turn to consume it.
+        await runner.emitInput("~just do it", undefined, "interactive");
+        await runner.emitInput("just do it", undefined, "interactive");
+        const { systemPromptOptions } = await emit("just do it");
+        if (!systemPromptOptions.sections[CLARIFY_SECTION_NAME]) {
+          throw new Error("Expected a stale bypass to expire rather than suppress the next prompt");
+        }
+      });
+
+      test("the network reminder appends and keeps the tool's structuredContent", async () => {
+        // pi deletes structuredContent when a patch replaces content without it.
+        try {
+          runner.setUIContext(uiStub() as unknown as ExtensionUIContext, "tui");
+          const structuredContent = { exitCode: 1, stderr: "boom" };
+          const patch = await runner.emitToolResult({
+            type: "tool_result",
+            toolCallId: "call-net-1",
+            toolName: "bash",
+            details: undefined,
+            input: {},
+            content: [{ type: "text", text: "connect ECONNREFUSED 127.0.0.1:8080" }],
+            isError: true,
+            structuredContent,
+          });
+          const textOf = (block: unknown): string => {
+            const b = block as { type?: string; text?: string };
+            return b?.type === "text" ? (b.text ?? "") : "";
+          };
+          if (!patch?.content || patch.content.length !== 2) {
+            throw new Error(`Expected the original block plus a reminder, got ${patch?.content?.length}`);
+          }
+          if (!textOf(patch.content[0]).includes("ECONNREFUSED")) {
+            throw new Error("Expected the original error text to survive");
+          }
+          if (!textOf(patch.content[1]).includes("NETWORK/PROXY ISSUE DETECTED")) {
+            throw new Error("Expected the reminder text to be appended");
+          }
+          if (!patch.structuredContent) {
+            throw new Error("Expected structuredContent to survive the reminder patch");
+          }
+          if (JSON.stringify(patch.structuredContent) !== JSON.stringify(structuredContent)) {
+            throw new Error(
+              `Expected the original structuredContent unchanged, got ${JSON.stringify(patch.structuredContent)}`,
+            );
+          }
+        } finally {
+          runner.setUIContext(undefined);
+        }
+      });
+
+      test("a non-network error gets no reminder", async () => {
+        try {
+          runner.setUIContext(uiStub() as unknown as ExtensionUIContext, "tui");
+          const patch = await runner.emitToolResult({
+            type: "tool_result",
+            toolCallId: "call-net-2",
+            toolName: "bash",
+            details: undefined,
+            input: {},
+            content: [{ type: "text", text: "SyntaxError: Unexpected token } at position 429" }],
+            isError: true,
+          });
+          if (patch !== undefined) {
+            throw new Error("Expected no reminder for a non-network error");
+          }
+        } finally {
+          runner.setUIContext(undefined);
+        }
+      });
+
+      test("/clarify off stops the tool from opening a dialog", async () => {
+        let dialogsOpened = 0;
+        runner.setUIContext(
+          {
+            ...uiStub(),
+            select: async () => {
+              dialogsOpened++;
+              return "Option A";
+            },
+          } as unknown as ExtensionUIContext,
+          "tui",
+        );
+
+        const command = runner.getCommand("clarify");
+        if (!command) throw new Error("Expected the clarify command to be registered");
+        await command.handler("off", { ui: { notify: () => {} } } as never);
+
+        try {
+          const definition = runner.getToolDefinition(CLARIFY_TOOL_NAME);
+          if (!definition?.execute) {
+            throw new Error("Expected clarify_prompt to expose an execute function");
+          }
+          const result = await definition.execute(
+            "call-off-1",
+            { question: "Which one?", options: ["Option A", "Option B", "Option C"] },
+            undefined,
+            () => {},
+            {
+              hasUI: true,
+              ui: { select: async () => { dialogsOpened++; return "Option A"; }, input: async () => undefined },
+              abort: () => {},
+            } as never,
+          );
+
+          if (dialogsOpened !== 0) {
+            throw new Error("Expected no dialog while clarification is disabled");
+          }
+          if (!JSON.stringify(result.content).includes("disabled")) {
+            throw new Error("Expected the tool to report that clarification is disabled");
+          }
+        } finally {
+          await command.handler("on", { ui: { notify: () => {} } } as never);
         }
       });
 
