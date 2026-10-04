@@ -12,6 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[BREAKING]:** Requires pi 1.0.0 or newer. Clarification and network-issue guidance now arrives as a structured `clarify` system-prompt section, a capability older hosts lack; there the extension loads but injects no guidance.
 - `clarify_prompt` registers with `exposure: "model-only"`, so no other tool can call it and open a blocking clarification dialog.
 - `typebox` is declared as a peer dependency so pi's copy is used instead of a nested duplicate.
+- The `~` bypass marker no longer triggers when followed by a path, so prompts beginning `~/…`, `~user/…` or `~\…` pass through untouched instead of being rewritten to a root-relative path. Windows separators count too, which matters because pi renders its cwd that way.
+
+### Fixed
+
+- A prompt submitted while the agent is streaming no longer strands the one-turn bypass. A new input now invalidates any bypass still pending, so one that never reached a turn expires instead of suppressing a later prompt. This also covers `steer`/`followUp` submitted while idle, which reach the input event with `streamingBehavior` blanked and are indistinguishable from a fresh prompt.
+- The one-turn bypass now survives prompt-template and skill-command expansion, which rewrites the prompt after the input handlers run and previously caused the bypass to be silently dropped.
+- `/clarify off` now stops `clarify_prompt` from opening a dialog. The tool stayed registered when clarification was disabled, so the model could still block on a prompt the user had turned off.
+- Network-error detection no longer fires on unrelated failures that merely share vocabulary: `timeout value 500`, `src/api.ts:502`, `network is not defined`, `cannot find module 'proxy-handler'`, `rateLimit is not a function`, `Disk quota exceeded`, `1 error in 500 ms`, `error code 500`, `429 passing` and `test timed out` are no longer reported as network problems. A status code or timeout now has to arrive with a status, network or API term rather than on its own.
+- Network-error detection now catches common real failures it previously missed, including `fetch failed`, `curl: (6) Could not resolve host`, `connect: connection refused`, `rate_limit_exceeded`, `TooManyRequests`, `TLS handshake failed`, `overloaded_error`, `ERR_TUNNEL_CONNECTION_FAILED`, `EPROTO`, gRPC `UNAVAILABLE`, `net::ERR_INTERNET_DISCONNECTED`, DNS resolution failures and a bare `429` or `503`.
+- Windows DNS failures (`No such host is known`, `Name or service not known`) are now recognised. That is the dominant spelling on Windows and was previously missed entirely.
+- Network-error detection no longer degrades quadratically on large single-line tool results. Bounding the status-code lookaheads takes a 200 KB result from several seconds to under a millisecond, so a big payload no longer stalls the UI.
+- The network reminder no longer discards a tool's `structuredContent`. pi drops it when a handler replaces content without also replacing it, so the original is echoed back and the tool's structured output survives. The reminder is now composed where pi types the tool result, so the patch needs no type assertion and image content in a tool result is no longer narrowed away.
+
+### Added
+
+- `e2e.test.ts`: loads the extension through pi's own loader and drives the real `ExtensionRunner`, covering prompt-section injection, tool exposure, the `~` bypass, the queued-input path, structured-content preservation and the disabled-tool guard.
 
 ## [0.3.0] - 2026-09-02
 

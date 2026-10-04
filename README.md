@@ -80,10 +80,12 @@ Prefix your prompt with `~` to skip clarification for one turn:
 ```
 
 > `~` is used instead of `!` because pi reserves `!`/`!!` as the built-in shell-command prefix.
+>
+> A prompt starting `~/…` or `~user/…` is a home-relative path, not a bypass marker, so it passes through untouched. A tilde followed by whitespace is always the marker, so `~ /etc/hosts` bypasses like any other `~ ` prompt.
 
 ### Network / proxy issue handling
 
-When a tool call fails with a network, proxy, connectivity, or rate-limit error (timeout, `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `ECONNRESET`, proxy error, `429`, `502/503/504`, quota exceeded, certificate issues, …), the extension:
+When a tool call fails with a network, proxy, connectivity, or rate-limit error (timeout, `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `ECONNRESET`, `fetch failed`, `socket hang up`, proxy error, `429`, `502/503/504`, TLS or certificate failures, …), the extension:
 
 1. Injects a `NETWORK_ISSUE_PROMPT` guideline into the system prompt telling the model to **not silently retry more than once** and to **not silently switch approaches**.
 2. Detects network/proxy error signatures in failed tool results (`tool_result` with `isError: true`) and appends a reminder that nudges the model to call `clarify_prompt` with options like:
