@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.4.1] - 2026-10-04
+
 ### Changed
 
 - The npm tarball now ships `CHANGELOG.md`, so a consumer reading what was installed can see the
@@ -125,7 +127,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/clarify` toggle command.
 - `!` bypass prefix.
 
-[Unreleased]: https://github.com/dkmnx/pi-clarify/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/dkmnx/pi-clarify/compare/v0.4.1...HEAD
+[v0.4.1]: https://github.com/dkmnx/pi-clarify/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/dkmnx/pi-clarify/compare/v0.3.0...v0.4.0
 [v0.3.0]: https://github.com/dkmnx/pi-clarify/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/dkmnx/pi-clarify/compare/v0.1.11...v0.2.0
