@@ -9,6 +9,30 @@ export const CLARIFY_TOOL_NAME = "clarify_prompt";
  * every structured section and replace the prompt wholesale. */
 export const CLARIFY_SECTION_NAME = "clarify";
 
+/** Exported for testing: the oldest pi that exposes mutable prompt sections. */
+export const MIN_PI_VERSION = "1.0.0";
+
+/** Exported for testing: fails loudly on a host too old to support the extension.
+ *
+ * pi 1.0.0 introduced mutable structured prompt sections. On an older host the
+ * field does not exist, so writing to it raises a bare TypeError that the runner
+ * swallows into a per-turn error log. Clarification would then be silently dead
+ * while the session looks healthy, so name the actual requirement instead.
+ *
+ * Every supported host normalizes `sections` to an object (pi's
+ * `normalizeBuildSystemPromptOptions` does `input.sections ?? {}`), so this cannot
+ * fire spuriously. */
+export function assertPromptSectionsSupported<T extends { sections?: unknown }>(
+  systemPromptOptions: T,
+): asserts systemPromptOptions is T & { sections: Record<string, string> } {
+  if (typeof systemPromptOptions.sections !== "object" || systemPromptOptions.sections === null) {
+    throw new Error(
+      `pi-clarify requires pi ${MIN_PI_VERSION} or newer: this host exposes no mutable system-prompt sections, ` +
+        "so clarification guidance cannot be injected. Upgrade pi to continue using this extension.",
+    );
+  }
+}
+
 /** Exported for testing: the clarification instructions carried in the `clarify` section */
 export const CLARIFY_PROMPT = `╔══════════════════════════════════════════════════════════════════════════════╗
 ║  MANDATORY: CLARIFY_PROMPT TOOL USAGE                                          ║
@@ -179,11 +203,13 @@ export interface ClarifyAgentStartResult {
 }
 
 /** Mirrors the fields of pi's NormalizedBuildSystemPromptOptions that this module
- * reads. Declared locally because pi is a devDependency only, and the package
+ * reads. `sections` is optional because pi only added it in 1.0.0; on an older host
+ * the property is absent entirely, which is what assertPromptSectionsSupported
+ * detects. Declared locally because pi is a devDependency only, and the package
  * ships this file as raw TypeScript for pi to load directly. */
 export interface ClarifyPromptOptions {
   selectedTools?: string[];
-  sections: Record<string, string>;
+  sections?: Record<string, string>;
 }
 
 function buildVagueReminder() {
@@ -218,6 +244,10 @@ export function buildClarifyAgentStartResult({
   ) {
     return null;
   }
+
+  // Only now, when the capability is actually needed. Disabled or bypassed turns on an
+  // old host still work, they just inject nothing.
+  assertPromptSectionsSupported(systemPromptOptions);
 
   // Sections render after the base prompt, so these instructions never displace
   // the base ones.

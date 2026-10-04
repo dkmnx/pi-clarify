@@ -27,9 +27,16 @@ import {
   buildClarifyAgentStartResult,
   isNetworkIssueResult,
   NETWORK_REMINDER_TEXT,
+  assertPromptSectionsSupported,
 } from "./clarify-utils.js";
 
-export { CLARIFY_PROMPT, CLARIFY_SECTION_NAME, CLARIFY_TOOL_NAME } from "./clarify-utils.js";
+export {
+  CLARIFY_PROMPT,
+  CLARIFY_SECTION_NAME,
+  CLARIFY_TOOL_NAME,
+  MIN_PI_VERSION,
+  assertPromptSectionsSupported,
+} from "./clarify-utils.js";
 export { buildClarifyAgentStartResult } from "./clarify-utils.js";
 export type { ClarifyAgentStartResult, ClarifyPromptOptions } from "./clarify-utils.js";
 

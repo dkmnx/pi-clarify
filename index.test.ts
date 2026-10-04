@@ -6,7 +6,9 @@ import {
   CLARIFY_PROMPT,
   CLARIFY_GUIDELINES,
   CLARIFY_SECTION_NAME,
+  CLARIFY_TOOL_NAME,
   NETWORK_ISSUE_PROMPT,
+  assertPromptSectionsSupported,
   buildClarifyAgentStartResult,
   isNetworkIssueResult,
   shouldBypassClarify,
@@ -305,6 +307,72 @@ function runTests() {
         }
         if (stripClarifyBypassPrefix("~") !== "") {
           throw new Error("Expected a bare '~' to strip to empty");
+        }
+      },
+    },
+    {
+      name: "assertPromptSectionsSupported: passes on a host that provides sections",
+      run: () => {
+        assertPromptSectionsSupported({ sections: {} });
+      },
+    },
+    {
+      name: "assertPromptSectionsSupported: names the required pi version on an older host",
+      run: () => {
+        let thrown = "";
+        try {
+          assertPromptSectionsSupported({});
+        } catch (error) {
+          thrown = error instanceof Error ? error.message : String(error);
+        }
+        if (!thrown) {
+          throw new Error("Expected a throw when the host exposes no prompt sections");
+        }
+        if (!thrown.includes("1.0.0")) {
+          throw new Error(`Expected the message to name the required version, got: ${thrown}`);
+        }
+        if (!thrown.includes("pi-clarify")) {
+          throw new Error(`Expected the message to name the extension, got: ${thrown}`);
+        }
+      },
+    },
+    {
+      name: "buildClarifyAgentStartResult names the required pi version when the host has no sections",
+      run: () => {
+        let thrown = "";
+        try {
+          buildClarifyAgentStartResult({
+            enabled: true,
+            bypassForThisTurn: false,
+            systemPromptOptions: { selectedTools: ["clarify_prompt"] },
+            isVague: false,
+          });
+        } catch (error) {
+          thrown = error instanceof Error ? error.message : String(error);
+        }
+        if (!thrown.includes("pi-clarify") || !thrown.includes("1.0.0")) {
+          throw new Error(`Expected a throw naming the extension and version, got: ${thrown || "no throw"}`);
+        }
+      },
+    },
+    {
+      name: "buildClarifyAgentStartResult stays quiet on an old host when disabled or bypassed",
+      run: () => {
+        const options = { selectedTools: ["clarify_prompt"] };
+        const disabled = buildClarifyAgentStartResult({
+          enabled: false,
+          bypassForThisTurn: false,
+          systemPromptOptions: options,
+          isVague: false,
+        });
+        const bypassed = buildClarifyAgentStartResult({
+          enabled: true,
+          bypassForThisTurn: true,
+          systemPromptOptions: options,
+          isVague: false,
+        });
+        if (disabled !== null || bypassed !== null) {
+          throw new Error("Expected no result, and no capability error, when nothing needs injecting");
         }
       },
     },
