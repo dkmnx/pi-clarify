@@ -21,11 +21,15 @@
   ],
   "type": "module",
   "license": "MIT",
-  "dependencies": {
-    "typebox": "^1.3.7"
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
   },
   "scripts": {
-    "test": "node --import tsx index.test.ts",
+    "test": "node --import tsx index.test.ts && node --import tsx e2e.test.ts",
+    "test:unit": "node --import tsx index.test.ts",
+    "test:e2e": "node --import tsx e2e.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "files": [
@@ -36,10 +40,11 @@
     "LICENSE"
   ],
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.4",
-    "@earendil-works/pi-tui": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "^1.0.0",
+    "@earendil-works/pi-tui": "^1.0.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.23.13",
+    "typebox": "^1.3.7",
     "typescript": "^5.9.3"
   }
 }

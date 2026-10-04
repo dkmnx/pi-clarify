@@ -5,6 +5,7 @@
 import {
   CLARIFY_PROMPT,
   CLARIFY_GUIDELINES,
+  CLARIFY_SECTION_NAME,
   NETWORK_ISSUE_PROMPT,
   buildClarifyAgentStartResult,
   buildNetworkReminderResult,
@@ -13,6 +14,22 @@ import {
   stripClarifyBypassPrefix,
   isVagueInput,
 } from "./clarify-utils.ts";
+
+/** Mirrors pi's NormalizedBuildSystemPromptOptions, the mutable object a
+ * before_agent_start handler receives and edits in place. */
+function promptOptions(selectedTools?: string[]) {
+  return {
+    selectedTools: selectedTools ?? ["read", "clarify_prompt"],
+    toolSnippets: {},
+    toolGuidelines: {},
+    promptGuidelines: [],
+    appendSystemPrompt: "",
+    sections: {} as Record<string, string>,
+    contextFiles: [],
+    skills: [],
+    cwd: ".",
+  };
+}
 
 interface TestCase {
   name: string;
@@ -53,52 +70,120 @@ function runTests() {
       },
     },
     {
-      name: "buildClarifyAgentStartResult: returns systemPrompt injection when enabled",
+      name: "buildClarifyAgentStartResult: writes instructions into a prompt section",
       run: () => {
-        const systemPrompt = "Base system prompt";
+        const options = promptOptions();
         const result = buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: false,
-          systemPrompt,
+          systemPromptOptions: options,
           isVague: false,
         });
 
         if (!result) {
           throw new Error("Expected result when enabled");
         }
-        if (!result.systemPrompt.includes("Base system prompt")) {
-          throw new Error("Expected result to include base system prompt");
+        const section = options.sections[CLARIFY_SECTION_NAME];
+        if (!section) {
+          throw new Error(`Expected a '${CLARIFY_SECTION_NAME}' prompt section to be written`);
         }
-        if (!result.systemPrompt.includes(CLARIFY_PROMPT)) {
-          throw new Error("Expected result systemPrompt to include CLARIFY_PROMPT");
+        if (!section.includes(CLARIFY_PROMPT)) {
+          throw new Error("Expected section to include CLARIFY_PROMPT");
+        }
+        if (!section.includes(NETWORK_ISSUE_PROMPT)) {
+          throw new Error("Expected section to include NETWORK_ISSUE_PROMPT");
+        }
+      },
+    },
+    {
+      name: "buildClarifyAgentStartResult: never returns systemPrompt, which would drop sections",
+      run: () => {
+        const options = promptOptions();
+        const result = buildClarifyAgentStartResult({
+          enabled: true,
+          bypassForThisTurn: false,
+          systemPromptOptions: options,
+          isVague: false,
+        });
+
+        if (!result) {
+          throw new Error("Expected result when enabled");
+        }
+        if ("systemPrompt" in result) {
+          throw new Error(
+            "Returning systemPrompt sets pi's forceSystemPrompt, which makes buildSystemPromptState drop all structured sections",
+          );
+        }
+      },
+    },
+    {
+      name: "buildClarifyAgentStartResult: leaves other sections untouched",
+      run: () => {
+        const options = promptOptions();
+        options.sections.other_extension = "<other>keep me</other>";
+        buildClarifyAgentStartResult({
+          enabled: true,
+          bypassForThisTurn: false,
+          systemPromptOptions: options,
+          isVague: false,
+        });
+
+        if (options.sections.other_extension !== "<other>keep me</other>") {
+          throw new Error("Expected other extensions' sections to survive");
         }
       },
     },
     {
       name: "buildClarifyAgentStartResult: returns null when disabled",
       run: () => {
+        const options = promptOptions();
         const result = buildClarifyAgentStartResult({
           enabled: false,
           bypassForThisTurn: false,
-          systemPrompt: "Base",
+          systemPromptOptions: options,
           isVague: false,
         });
         if (result !== null) {
           throw new Error("Expected null when disabled");
+        }
+        if (CLARIFY_SECTION_NAME in options.sections) {
+          throw new Error("Expected no section written when disabled");
         }
       },
     },
     {
       name: "buildClarifyAgentStartResult: returns null when bypassed for this turn",
       run: () => {
+        const options = promptOptions();
         const result = buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: true,
-          systemPrompt: "Base",
+          systemPromptOptions: options,
           isVague: false,
         });
         if (result !== null) {
           throw new Error("Expected null when bypassed");
+        }
+        if (CLARIFY_SECTION_NAME in options.sections) {
+          throw new Error("Expected no section written when bypassed");
+        }
+      },
+    },
+    {
+      name: "buildClarifyAgentStartResult: skips injection when clarify_prompt is not in the active tool set",
+      run: () => {
+        const options = promptOptions(["read", "bash"]);
+        const result = buildClarifyAgentStartResult({
+          enabled: true,
+          bypassForThisTurn: false,
+          systemPromptOptions: options,
+          isVague: false,
+        });
+        if (result !== null) {
+          throw new Error("Expected null when clarify_prompt is not active");
+        }
+        if (CLARIFY_SECTION_NAME in options.sections) {
+          throw new Error("Expected no section when the tool is inactive");
         }
       },
     },
@@ -108,7 +193,7 @@ function runTests() {
         const result = buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: false,
-          systemPrompt: "Base",
+          systemPromptOptions: promptOptions(),
           isVague: true,
         });
 
@@ -132,7 +217,7 @@ function runTests() {
         const result = buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: false,
-          systemPrompt: "Base",
+          systemPromptOptions: promptOptions(),
           isVague: false,
         });
 
@@ -317,26 +402,6 @@ function runTests() {
           if (isNetworkIssueResult({ isError: true, content: [{ type: "text", text }] })) {
             throw new Error(`Expected '${text}' NOT to be flagged`);
           }
-        }
-      },
-    },
-    {
-      name: "buildClarifyAgentStartResult: injects NETWORK_ISSUE_PROMPT alongside CLARIFY_PROMPT",
-      run: () => {
-        const result = buildClarifyAgentStartResult({
-          enabled: true,
-          bypassForThisTurn: false,
-          systemPrompt: "Base",
-          isVague: false,
-        });
-        if (!result) {
-          throw new Error("Expected result when enabled");
-        }
-        if (!result.systemPrompt.includes(CLARIFY_PROMPT)) {
-          throw new Error("Expected systemPrompt to include CLARIFY_PROMPT");
-        }
-        if (!result.systemPrompt.includes(NETWORK_ISSUE_PROMPT)) {
-          throw new Error("Expected systemPrompt to include NETWORK_ISSUE_PROMPT");
         }
       },
     },

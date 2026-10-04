@@ -22,15 +22,16 @@ import {
   isVagueInput,
   shouldBypassClarify,
   stripClarifyBypassPrefix,
+  CLARIFY_TOOL_NAME,
   CLARIFY_GUIDELINES,
   buildClarifyAgentStartResult,
   isNetworkIssueResult,
   buildNetworkReminderResult,
 } from "./clarify-utils.js";
 
-export { CLARIFY_PROMPT } from "./clarify-utils.js";
+export { CLARIFY_PROMPT, CLARIFY_SECTION_NAME, CLARIFY_TOOL_NAME } from "./clarify-utils.js";
 export { buildClarifyAgentStartResult } from "./clarify-utils.js";
-export type { ClarifyAgentStartResult } from "./clarify-utils.js";
+export type { ClarifyAgentStartResult, ClarifyPromptOptions } from "./clarify-utils.js";
 
 const OTHER_OPTION = "Your answer...";
 
@@ -101,9 +102,8 @@ export default function (pi: ExtensionAPI) {
     const result = buildClarifyAgentStartResult({
       enabled,
       bypassForThisTurn: bypassNextTurn,
-      systemPrompt: event.systemPrompt,
-      isVague: isVagueInput(event.prompt),
       systemPromptOptions: event.systemPromptOptions,
+      isVague: isVagueInput(event.prompt),
     });
 
     bypassNextTurn = false;
@@ -112,12 +112,16 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "clarify_prompt",
+    name: CLARIFY_TOOL_NAME,
     label: "Clarify",
     description:
       "Ask the user a clarification question when their prompt is vague. Presents options for the user to pick from or type their own answer.",
     promptSnippet: "Ask the user to clarify their intent with selectable options",
     promptGuidelines: CLARIFY_GUIDELINES,
+    // The model calls this; nothing else should. Without this it defaults to
+    // "direct", which also makes it reachable from other tools via
+    // ctx.executeTool() -- a blocking modal prompt is not safe to invoke indirectly.
+    exposure: "model-only",
     parameters: Type.Object({
       question: Type.String({ description: "The clarification question to ask" }),
       options: Type.Array(Type.String({ description: "A suggested answer" }), {

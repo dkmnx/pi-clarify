@@ -1,4 +1,15 @@
-/** Exported for testing: the clarification instructions prepended to system prompt */
+/** Exported for testing: the tool name pi-clarify registers and references in prompts. */
+export const CLARIFY_TOOL_NAME = "clarify_prompt";
+
+/** Exported for testing: the prompt section pi renders as `<clarify>...</clarify>`.
+ *
+ * pi's before_agent_start contract exposes systemPromptOptions as mutable prompt
+ * sections, and the transcript records a section delta. Returning `systemPrompt`
+ * instead would set forceSystemPrompt, which makes pi's buildSystemPromptState drop
+ * every structured section and replace the prompt wholesale. */
+export const CLARIFY_SECTION_NAME = "clarify";
+
+/** Exported for testing: the clarification instructions carried in the `clarify` section */
 export const CLARIFY_PROMPT = `╔══════════════════════════════════════════════════════════════════════════════╗
 ║  MANDATORY: CLARIFY_PROMPT TOOL USAGE                                          ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -96,14 +107,24 @@ export const CLARIFY_GUIDELINES = [
   "Wait for user selection before proceeding with any action.",
 ];
 
-/** Exported for testing: result shape for before_agent_start handler */
+/** Exported for testing: result shape for before_agent_start handler.
+ *
+ * Carries no `systemPrompt` key on purpose: see CLARIFY_SECTION_NAME. Instructions go
+ * into systemPromptOptions.sections instead, so pi records a transcript delta. */
 export interface ClarifyAgentStartResult {
-  systemPrompt: string;
   message?: {
     customType: string;
     content: string;
     display: boolean;
   };
+}
+
+/** Mirrors the fields of pi's NormalizedBuildSystemPromptOptions that this module
+ * reads. Declared locally because pi is a devDependency only, and the package
+ * ships this file as raw TypeScript for pi to load directly. */
+export interface ClarifyPromptOptions {
+  selectedTools?: string[];
+  sections: Record<string, string>;
 }
 
 function buildVagueReminder() {
@@ -118,40 +139,33 @@ function buildVagueReminder() {
 export function buildClarifyAgentStartResult({
   enabled,
   bypassForThisTurn,
-  systemPrompt,
-  isVague,
   systemPromptOptions,
+  isVague,
 }: {
   enabled: boolean;
   bypassForThisTurn: boolean;
-  systemPrompt: string;
+  systemPromptOptions: ClarifyPromptOptions;
   isVague: boolean;
-  systemPromptOptions?: { selectedTools?: string[] };
 }): ClarifyAgentStartResult | null {
   if (!enabled || bypassForThisTurn) {
     return null;
   }
 
-  // Only inject if clarify_prompt tool is in the active tool set
-  // (defensive: respects tool-scoping features from pi v0.68.0+)
+  // Only inject if clarify_prompt is in the active tool set, so a session that
+  // scoped the tool out never sees instructions to call it.
   if (
-    systemPromptOptions?.selectedTools &&
-    !systemPromptOptions.selectedTools.includes("clarify_prompt")
+    systemPromptOptions.selectedTools &&
+    !systemPromptOptions.selectedTools.includes(CLARIFY_TOOL_NAME)
   ) {
     return null;
   }
 
-  // Append after the base system prompt so critical base instructions keep
-  // primacy; prepending would displace them.
-  const result: ClarifyAgentStartResult = {
-    systemPrompt: `${systemPrompt}\n\n${CLARIFY_PROMPT}\n\n${NETWORK_ISSUE_PROMPT}`,
-  };
+  // Sections render after the base prompt, so these instructions never displace
+  // the base ones.
+  systemPromptOptions.sections[CLARIFY_SECTION_NAME] =
+    `${CLARIFY_PROMPT}\n\n${NETWORK_ISSUE_PROMPT}`;
 
-  if (isVague) {
-    result.message = buildVagueReminder();
-  }
-
-  return result;
+  return isVague ? { message: buildVagueReminder() } : {};
 }
 
 /** Check if input is structurally empty and therefore unactionable */
