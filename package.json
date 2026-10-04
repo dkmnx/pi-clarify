@@ -36,6 +36,7 @@
     "index.ts",
     "clarify-utils.ts",
     "README.md",
+    "CHANGELOG.md",
     "assets/sample.png",
     "LICENSE"
   ],

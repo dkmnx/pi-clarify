@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The npm tarball now ships `CHANGELOG.md`, so a consumer reading what was installed can see the
+  release history, including the pi 1.0.0 requirement that 0.4.0 introduced.
+
 ## [v0.4.0] - 2026-10-04
 
 ### Changed
