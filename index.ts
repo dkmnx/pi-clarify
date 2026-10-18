@@ -133,7 +133,11 @@ export default function (pi: ExtensionAPI) {
       enabled,
       bypassForThisTurn,
       systemPromptOptions: event.systemPromptOptions,
-      isVague: isVagueInput(event.prompt),
+      // On pi 1.2+ a custom-message trigger (pi.sendMessage with triggerTurn, e.g.
+      // a subagent result) builds the before_agent_start event with no prompt field,
+      // while the runner types prompt as string. A promptless turn is not a vague
+      // user request.
+      isVague: typeof event.prompt === "string" && isVagueInput(event.prompt),
     });
 
     return result ?? undefined;

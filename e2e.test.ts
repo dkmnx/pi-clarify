@@ -190,6 +190,27 @@ function runTests() {
         }
       });
 
+      test("a turn without a prompt gets the section, no reminder, and no error", async () => {
+        // Audit: protects the promptless turn pi 1.2+ starts on sendMessage
+        // { triggerTurn: true } (pi-subagents results, pi-intercom messages), where
+        // the event is built from the custom message and carries no prompt field.
+        // Regression: issue #3, isVagueInput(event.prompt) threw "Cannot read
+        // properties of undefined (reading 'trim')" on every such turn. No prior
+        // test covers it: every other emit passes a string. No test-only seam: the
+        // cast mirrors that host runtime, while the pinned devDependency types
+        // emitBeforeAgentStart's prompt as string.
+        const { systemPromptOptions, messages } = await emit(undefined as unknown as string);
+
+        if (!systemPromptOptions.sections[CLARIFY_SECTION_NAME]) {
+          throw new Error("Expected a promptless turn to still receive the clarify section");
+        }
+        if (messages.length !== 0) {
+          throw new Error(
+            `Expected no vague reminder for a turn with no user prompt, got ${messages.length}`,
+          );
+        }
+      });
+
       test("the section still lands for a short prompt the model must judge", async () => {
         // isVagueInput only flags structurally empty input. Semantic vagueness like
         // "fix it" is left to the model reading the injected section, so the section
