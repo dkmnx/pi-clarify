@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A turn that starts without a user prompt, such as a subagent result from `sendMessage` or an inbound `pi-intercom` message, no longer throws `Cannot read properties of undefined (reading 'trim')` in `before_agent_start`. Such a turn still receives the clarify prompt section, without the empty-input reminder.
+
 ## [v0.4.1] - 2026-10-04
 
 ### Changed
