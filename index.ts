@@ -27,7 +27,6 @@ import {
   buildClarifyAgentStartResult,
   isNetworkIssueResult,
   NETWORK_REMINDER_TEXT,
-  assertPromptSectionsSupported,
 } from "./clarify-utils.js";
 
 export {
@@ -35,7 +34,7 @@ export {
   CLARIFY_SECTION_NAME,
   CLARIFY_TOOL_NAME,
   MIN_PI_VERSION,
-  assertPromptSectionsSupported,
+  assertHostSupported,
 } from "./clarify-utils.js";
 export { buildClarifyAgentStartResult } from "./clarify-utils.js";
 export type { ClarifyAgentStartResult, ClarifyPromptOptions } from "./clarify-utils.js";
@@ -108,7 +107,11 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_result", async (event, ctx) => {
     if (!enabled) return;
-    if (ctx.mode !== "tui" || !ctx.hasUI) return;
+    // The reminder is text appended to a tool result, so it needs no terminal.
+    // It needs the same UI clarify_prompt needs, which RPC mode also provides;
+    // gating on mode "tui" left RPC clients with the dialog but no nudge on the
+    // failed result itself.
+    if (!ctx.hasUI) return;
     if (!isNetworkIssueResult(event)) return;
     // Built here rather than in a helper because pi types event.content, so the
     // spread needs no assertion: the earlier version took `unknown` and had to cast
@@ -133,11 +136,12 @@ export default function (pi: ExtensionAPI) {
       enabled,
       bypassForThisTurn,
       systemPromptOptions: event.systemPromptOptions,
-      // On pi 1.2+ a custom-message trigger (pi.sendMessage with triggerTurn, e.g.
-      // a subagent result) builds the before_agent_start event with no prompt field,
-      // while the runner types prompt as string. A promptless turn is not a vague
-      // user request.
-      isVague: typeof event.prompt === "string" && isVagueInput(event.prompt),
+      messageType: event.messageType,
+      // A custom-message trigger (pi.sendMessage with triggerTurn, e.g. a subagent
+      // result) builds the event from the message and carries no prompt. The
+      // messageType check short-circuits, so on a pre-1.2.0 host event.prompt is
+      // never read and the builder raises the version error instead.
+      isVague: event.messageType === "user" && isVagueInput(event.prompt),
     });
 
     return result ?? undefined;

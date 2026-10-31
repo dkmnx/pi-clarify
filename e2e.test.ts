@@ -16,7 +16,11 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
+import type {
+  BeforeAgentStartCustomEvent,
+  BuildSystemPromptOptions,
+  ExtensionUIContext,
+} from "@earendil-works/pi-coding-agent";
 
 import { CLARIFY_PROMPT, CLARIFY_SECTION_NAME, CLARIFY_TOOL_NAME, NETWORK_ISSUE_PROMPT } from "./clarify-utils.ts";
 
@@ -88,8 +92,18 @@ function runTests() {
       // registry), so a live session lists clarify_prompt here.
       const activeTools = ["read", "bash", "edit", "write", CLARIFY_TOOL_NAME];
 
-      const emit = async (prompt: string, options: Record<string, unknown> = {}) => {
-        const result = await runner.emitBeforeAgentStart(prompt, undefined, {
+      // Audit: pi 1.2.0 made the event a union on messageType and moved the run
+      // trigger into its own argument. The old three-arg call left the options
+      // undefined, which pi dereferences before any handler runs.
+      type EmitTrigger =
+        | { messageType: "user"; prompt: string }
+        | { messageType: "custom"; message: BeforeAgentStartCustomEvent["message"] };
+
+      const emitTrigger = async (
+        trigger: EmitTrigger,
+        options: Partial<BuildSystemPromptOptions> = {},
+      ) => {
+        const result = await runner.emitBeforeAgentStart(trigger, {
           cwd: tempDir,
           selectedTools: activeTools,
           ...options,
@@ -102,6 +116,9 @@ function runTests() {
         }
         return result;
       };
+
+      const emit = (prompt: string, options: Partial<BuildSystemPromptOptions> = {}) =>
+        emitTrigger({ messageType: "user", prompt }, options);
 
       test("pi loads the extension without reporting errors", () => {
         if (runtimeErrors.length > 0) {
@@ -195,11 +212,20 @@ function runTests() {
         // { triggerTurn: true } (pi-subagents results, pi-intercom messages), where
         // the event is built from the custom message and carries no prompt field.
         // Regression: issue #3, isVagueInput(event.prompt) threw "Cannot read
-        // properties of undefined (reading 'trim')" on every such turn. No prior
-        // test covers it: every other emit passes a string. No test-only seam: the
-        // cast mirrors that host runtime, while the pinned devDependency types
-        // emitBeforeAgentStart's prompt as string.
-        const { systemPromptOptions, messages } = await emit(undefined as unknown as string);
+        // properties of undefined (reading 'trim')" on every such turn. The old
+        // version faked it with `undefined as unknown as string`, which the 1.4.0
+        // trigger union rejects and which never exercised the custom branch. No
+        // test-only seam: the runner builds the same event pi builds.
+        const { systemPromptOptions, messages } = await emitTrigger({
+          messageType: "custom",
+          message: {
+            role: "custom",
+            customType: "pi-subagents",
+            content: "subagent finished: 3 files changed",
+            display: false,
+            timestamp: Date.now(),
+          },
+        });
 
         if (!systemPromptOptions.sections[CLARIFY_SECTION_NAME]) {
           throw new Error("Expected a promptless turn to still receive the clarify section");
@@ -343,6 +369,66 @@ function runTests() {
         }
       });
 
+      test("the network reminder also fires where dialogs work, such as RPC", async () => {
+        // Audit: protects the tool_result gate. RPC mode installs a UI context, so
+        // clarify_prompt opens dialogs there, but the per-result reminder required
+        // mode "tui" and never fired for RPC clients. The model read the
+        // NETWORK_ISSUE_PROMPT section but got no nudge on the failed result itself.
+        // Coverage gap: every other tool_result test sets mode "tui". No test-only
+        // seam: setUIContext is the runner's own API.
+        try {
+          runner.setUIContext(uiStub() as unknown as ExtensionUIContext, "rpc");
+          const patch = await runner.emitToolResult({
+            type: "tool_result",
+            toolCallId: "call-net-rpc",
+            toolName: "bash",
+            details: undefined,
+            input: {},
+            content: [{ type: "text", text: "connect ECONNREFUSED 127.0.0.1:8080" }],
+            isError: true,
+          });
+          if (!patch?.content || patch.content.length !== 2) {
+            throw new Error(`Expected the error plus a reminder in RPC mode, got ${patch?.content?.length}`);
+          }
+          const reminder = patch.content[1] as { type?: string; text?: string };
+          if (reminder.type !== "text" || !reminder.text?.includes("NETWORK/PROXY ISSUE DETECTED")) {
+            throw new Error(`Expected the reminder text, got ${JSON.stringify(reminder)}`);
+          }
+        } finally {
+          runner.setUIContext(undefined);
+        }
+      });
+
+      test("a network error without a UI gets no reminder", async () => {
+        // Audit: protects the other half of the same gate. The reminder tells the
+        // model to open a dialog, so it must not fire where no dialog exists.
+        // Regression: a gate of `enabled` alone appends the reminder in print and
+        // JSON mode, where clarify_prompt can only return a text fallback.
+        // Coverage gap: setUIContext(undefined) is the print-mode state and no test
+        // asserted the negative case. No test-only seam: the runner's own default.
+        runner.setUIContext(undefined);
+        const errorsBefore = runtimeErrors.length;
+        const patch = await runner.emitToolResult({
+          type: "tool_result",
+          toolCallId: "call-net-noui",
+          toolName: "bash",
+          details: undefined,
+          input: {},
+          content: [{ type: "text", text: "connect ECONNREFUSED 127.0.0.1:8080" }],
+          isError: true,
+        });
+        // A handler that throws also returns undefined here, which would pass the
+        // assertion above while the extension is broken.
+        if (runtimeErrors.length !== errorsBefore) {
+          throw new Error(
+            `Extension handler errored: ${runtimeErrors.slice(errorsBefore).join("; ")}`,
+          );
+        }
+        if (patch !== undefined) {
+          throw new Error("Expected no reminder when the host has no UI");
+        }
+      });
+
       test("a non-network error gets no reminder", async () => {
         try {
           runner.setUIContext(uiStub() as unknown as ExtensionUIContext, "tui");
@@ -360,6 +446,140 @@ function runTests() {
           }
         } finally {
           runner.setUIContext(undefined);
+        }
+      });
+
+      test("the tool returns the picked option, the typed answer, or a text fallback", async () => {
+        // Audit: protects clarify_prompt's four exits. A wrong exit aborts the run
+        // (ctx.abort) or answers the model "User cancelled." after the user typed a
+        // reply.
+        // Regression: the freeform option is matched by exact string, so renaming it
+        // in the prompt or in ensureOtherOption makes the match miss. A typed answer
+        // then comes back as "User answered: <label>" with wasOther false, and the
+        // model never sees the text.
+        // Coverage gap: no test reached the freeform branch, the empty-answer guard,
+        // or the cancel exit, which is the only exit that kills the turn.
+        // Seam check: the stub ctx matches the one the disabled-path test uses, and
+        // the tool still runs through its registered definition. No production seam.
+        const definition = runner.getToolDefinition(CLARIFY_TOOL_NAME);
+        if (!definition?.execute) {
+          throw new Error("Expected clarify_prompt to expose an execute function");
+        }
+        const params = {
+          question: "Which one?",
+          options: ["Option A", "Option B", "Option C"],
+        };
+        let aborts = 0;
+        let dialogs = 0;
+
+        const run = (ctx: Record<string, unknown>) =>
+          definition.execute(
+            "call-answer",
+            params,
+            undefined,
+            () => {},
+            {
+              abort: () => {
+                aborts++;
+              },
+              ...ctx,
+            } as never,
+          );
+
+        let offered: string[] = [];
+        const picked = await run({
+          hasUI: true,
+          ui: {
+            select: async (_title: string, options: string[]) => {
+              offered = options;
+              dialogs++;
+              return "Option B";
+            },
+            input: async () => undefined,
+          },
+        });
+        // ensureOtherOption appends the freeform entry. Without it the user has no
+        // way to type an answer, and every stub above still returns a value.
+        if (offered.length !== params.options.length + 1 || !offered.includes("Your answer...")) {
+          throw new Error(`Expected the options plus the freeform entry, got ${JSON.stringify(offered)}`);
+        }
+        if (!JSON.stringify(picked.content).includes("User answered: Option B")) {
+          throw new Error(`Expected the picked option, got ${JSON.stringify(picked.content)}`);
+        }
+        const pickedDetails = picked.details as { answer?: string; wasOther?: boolean };
+        if (pickedDetails.answer !== "Option B" || pickedDetails.wasOther !== false) {
+          throw new Error(`Expected answer 'Option B', got ${JSON.stringify(pickedDetails)}`);
+        }
+        if (aborts !== 0) {
+          throw new Error("Expected no abort when the user picked an option");
+        }
+
+        const typed = await run({
+          hasUI: true,
+          ui: {
+            select: async () => {
+              dialogs++;
+              return "Your answer...";
+            },
+            input: async () => "  deploy to staging  ",
+          },
+        });
+        if (!JSON.stringify(typed.content).includes("User answered: deploy to staging")) {
+          throw new Error(`Expected the trimmed typed answer, got ${JSON.stringify(typed.content)}`);
+        }
+        const typedDetails = typed.details as { answer?: string; wasOther?: boolean };
+        if (typedDetails.answer !== "deploy to staging" || typedDetails.wasOther !== true) {
+          throw new Error(`Expected wasOther with the typed answer, got ${JSON.stringify(typedDetails)}`);
+        }
+        if (aborts !== 0) {
+          throw new Error("Expected no abort when the user typed an answer");
+        }
+
+        const dialogsBefore = dialogs;
+        const headless = await run({
+          hasUI: false,
+          ui: {
+            select: async () => {
+              dialogs++;
+              return "Option A";
+            },
+            input: async () => "never asked",
+          },
+        });
+        if (!JSON.stringify(headless.content).includes("Which one?")) {
+          throw new Error(`Expected the question as text without UI, got ${JSON.stringify(headless.content)}`);
+        }
+        if (dialogs !== dialogsBefore) {
+          throw new Error("Expected no dialog when the host has no UI");
+        }
+        if (aborts !== 0) {
+          throw new Error("Expected no abort when the host has no UI");
+        }
+
+        const abortsBefore = aborts;
+        const empty = await run({
+          hasUI: true,
+          ui: { select: async () => "Your answer...", input: async () => "   " },
+        });
+        if (!JSON.stringify(empty.content).includes("User cancelled.")) {
+          throw new Error(`Expected a blank typed answer to cancel, got ${JSON.stringify(empty.content)}`);
+        }
+        if ((empty.details as { skipped?: boolean }).skipped !== true) {
+          throw new Error("Expected the blank answer to report skipped");
+        }
+
+        const cancelled = await run({
+          hasUI: true,
+          ui: { select: async () => undefined, input: async () => undefined },
+        });
+        if (!JSON.stringify(cancelled.content).includes("User cancelled.")) {
+          throw new Error(`Expected a dismissed dialog to cancel, got ${JSON.stringify(cancelled.content)}`);
+        }
+        if ((cancelled.details as { skipped?: boolean }).skipped !== true) {
+          throw new Error("Expected the dismissed dialog to report skipped");
+        }
+        if (aborts !== abortsBefore + 2) {
+          throw new Error(`Expected one abort per cancel, got ${aborts - abortsBefore}`);
         }
       });
 

@@ -9,26 +9,26 @@ export const CLARIFY_TOOL_NAME = "clarify_prompt";
  * every structured section and replace the prompt wholesale. */
 export const CLARIFY_SECTION_NAME = "clarify";
 
-/** Exported for testing: the oldest pi that exposes mutable prompt sections. */
-export const MIN_PI_VERSION = "1.0.0";
+/** Exported for testing: the oldest pi that sends `messageType` on before_agent_start. */
+export const MIN_PI_VERSION = "1.2.0";
 
-/** Exported for testing: fails loudly on a host too old to support the extension.
+/** Exported for testing: fails loudly on a host that predates the messageType union.
  *
- * pi 1.0.0 introduced mutable structured prompt sections. On an older host the
- * field does not exist, so writing to it raises a bare TypeError that the runner
- * swallows into a per-turn error log. Clarification would then be silently dead
- * while the session looks healthy, so name the actual requirement instead.
+ * pi 1.2.0 split before_agent_start into a union on `messageType`, so it is the one
+ * field that says whether the turn carries a user prompt. An older host omits it,
+ * leaving the event with no discriminator; the runner then swallows the failure into
+ * a per-turn error log, so clarification would be silently dead while the session
+ * looks healthy. Naming the requirement makes the stale host obvious instead.
  *
- * Every supported host normalizes `sections` to an object (pi's
- * `normalizeBuildSystemPromptOptions` does `input.sections ?? {}`), so this cannot
- * fire spuriously. */
-export function assertPromptSectionsSupported<T extends { sections?: unknown }>(
-  systemPromptOptions: T,
-): asserts systemPromptOptions is T & { sections: Record<string, string> } {
-  if (typeof systemPromptOptions.sections !== "object" || systemPromptOptions.sections === null) {
+ * One probe covers the whole floor: `messageType` implies
+ * `systemPromptOptions.sections`, because sections arrived in pi 1.0.0 and the union
+ * in 1.2.0. A host new enough to send the union is necessarily new enough to expose
+ * sections, so probing the union is sufficient on its own. */
+export function assertHostSupported(event: { messageType?: unknown }): void {
+  if (event.messageType !== "user" && event.messageType !== "custom") {
     throw new Error(
-      `pi-clarify requires pi ${MIN_PI_VERSION} or newer: this host exposes no mutable system-prompt sections, ` +
-        "so clarification guidance cannot be injected. Upgrade pi to continue using this extension.",
+      `pi-clarify requires pi ${MIN_PI_VERSION} or newer: this host sends no messageType on before_agent_start, ` +
+        "so clarification cannot tell a user prompt from an extension message. Upgrade pi to continue using this extension.",
     );
   }
 }
@@ -203,13 +203,13 @@ export interface ClarifyAgentStartResult {
 }
 
 /** Mirrors the fields of pi's NormalizedBuildSystemPromptOptions that this module
- * reads. `sections` is optional because pi only added it in 1.0.0; on an older host
- * the property is absent entirely, which is what assertPromptSectionsSupported
- * detects. Declared locally because pi is a devDependency only, and the package
+ * reads. `sections` is required because the 1.2.0 floor implies it: pi 1.0.0
+ * introduced mutable sections, and any host new enough to send `messageType` also
+ * exposes them. Declared locally because pi is a devDependency only, and the package
  * ships this file as raw TypeScript for pi to load directly. */
 export interface ClarifyPromptOptions {
   selectedTools?: string[];
-  sections?: Record<string, string>;
+  sections: Record<string, string>;
 }
 
 function buildVagueReminder() {
@@ -225,11 +225,13 @@ export function buildClarifyAgentStartResult({
   enabled,
   bypassForThisTurn,
   systemPromptOptions,
+  messageType,
   isVague,
 }: {
   enabled: boolean;
   bypassForThisTurn: boolean;
   systemPromptOptions: ClarifyPromptOptions;
+  messageType?: unknown;
   isVague: boolean;
 }): ClarifyAgentStartResult | null {
   if (!enabled || bypassForThisTurn) {
@@ -247,7 +249,7 @@ export function buildClarifyAgentStartResult({
 
   // Only now, when the capability is actually needed. Disabled or bypassed turns on an
   // old host still work, they just inject nothing.
-  assertPromptSectionsSupported(systemPromptOptions);
+  assertHostSupported({ messageType });
 
   // Sections render after the base prompt, so these instructions never displace
   // the base ones.

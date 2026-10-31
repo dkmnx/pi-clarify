@@ -8,7 +8,7 @@ import {
   CLARIFY_SECTION_NAME,
   CLARIFY_TOOL_NAME,
   NETWORK_ISSUE_PROMPT,
-  assertPromptSectionsSupported,
+  assertHostSupported,
   buildClarifyAgentStartResult,
   isNetworkIssueResult,
   shouldBypassClarify,
@@ -77,6 +77,7 @@ function runTests() {
         const result = buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: false,
+          messageType: "user",
           systemPromptOptions: options,
           isVague: false,
         });
@@ -103,6 +104,7 @@ function runTests() {
         const result = buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: false,
+          messageType: "user",
           systemPromptOptions: options,
           isVague: false,
         });
@@ -125,6 +127,7 @@ function runTests() {
         buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: false,
+          messageType: "user",
           systemPromptOptions: options,
           isVague: false,
         });
@@ -177,6 +180,7 @@ function runTests() {
         const result = buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: false,
+          messageType: "user",
           systemPromptOptions: options,
           isVague: false,
         });
@@ -194,6 +198,7 @@ function runTests() {
         const result = buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: false,
+          messageType: "user",
           systemPromptOptions: promptOptions(),
           isVague: true,
         });
@@ -218,6 +223,7 @@ function runTests() {
         const result = buildClarifyAgentStartResult({
           enabled: true,
           bypassForThisTurn: false,
+          messageType: "user",
           systemPromptOptions: promptOptions(),
           isVague: false,
         });
@@ -311,67 +317,100 @@ function runTests() {
       },
     },
     {
-      name: "assertPromptSectionsSupported: passes on a host that provides sections",
+      name: "assertHostSupported: names the required pi version when messageType is missing",
       run: () => {
-        assertPromptSectionsSupported({ sections: {} });
+        // Audit: protects the host-floor probe. Regression: a host without
+        // messageType predates the 1.2.0 union, so the user-prompt check is always
+        // false and the vague reminder silently never fires. Coverage gap: every
+        // injection test supplies messageType, so a deleted or inverted guard leaves
+        // them green. No production seam: the exported guard is the one the handler
+        // calls.
+        // The two cases are equal at runtime, and differ for an `in`-based check,
+        // which would let the present-but-undefined field through.
+        for (const event of [{}, { messageType: undefined }]) {
+          let thrown = "";
+          try {
+            assertHostSupported(event);
+          } catch (error) {
+            thrown = error instanceof Error ? error.message : String(error);
+          }
+          if (!thrown) {
+            throw new Error(`Expected a throw when messageType is ${JSON.stringify(event.messageType)}`);
+          }
+          if (!thrown.includes("1.2.0")) {
+            throw new Error(`Expected the message to name the required version, got: ${thrown}`);
+          }
+          if (!thrown.includes("pi-clarify")) {
+            throw new Error(`Expected the message to name the extension, got: ${thrown}`);
+          }
+        }
       },
     },
     {
-      name: "assertPromptSectionsSupported: names the required pi version on an older host",
+      name: "assertHostSupported: accepts both members of the messageType union",
       run: () => {
-        let thrown = "";
-        try {
-          assertPromptSectionsSupported({});
-        } catch (error) {
-          thrown = error instanceof Error ? error.message : String(error);
-        }
-        if (!thrown) {
-          throw new Error("Expected a throw when the host exposes no prompt sections");
-        }
-        if (!thrown.includes("1.0.0")) {
-          throw new Error(`Expected the message to name the required version, got: ${thrown}`);
-        }
-        if (!thrown.includes("pi-clarify")) {
-          throw new Error(`Expected the message to name the extension, got: ${thrown}`);
-        }
+        // Audit: protects the positive half of the probe, so a supported host is
+        // never rejected. Regression: narrowing the check to "user" throws on every
+        // custom-message turn, which is exactly the turn the section must still reach.
+        // Coverage gap: the builder tests only pass "user". No production seam: the
+        // exported guard is the one the handler calls.
+        assertHostSupported({ messageType: "user" });
+        assertHostSupported({ messageType: "custom" });
       },
     },
     {
-      name: "buildClarifyAgentStartResult names the required pi version when the host has no sections",
+      name: "buildClarifyAgentStartResult: names the required pi version when the host has no messageType",
       run: () => {
+        // Audit: protects the guard's call site in the builder. Regression: dropping
+        // it, or gating it on sections instead, lets a pre-1.2.0 host inject with no
+        // messageType to decide whether the turn carries a user prompt. Coverage gap:
+        // the direct guard test never exercises the builder. No production seam: the
+        // builder is the path index.ts runs.
         let thrown = "";
         try {
           buildClarifyAgentStartResult({
             enabled: true,
             bypassForThisTurn: false,
-            systemPromptOptions: { selectedTools: ["clarify_prompt"] },
+            systemPromptOptions: { selectedTools: ["clarify_prompt"], sections: {} },
             isVague: false,
           });
         } catch (error) {
           thrown = error instanceof Error ? error.message : String(error);
         }
-        if (!thrown.includes("pi-clarify") || !thrown.includes("1.0.0")) {
+        if (!thrown.includes("pi-clarify") || !thrown.includes("1.2.0")) {
           throw new Error(`Expected a throw naming the extension and version, got: ${thrown || "no throw"}`);
         }
       },
     },
     {
-      name: "buildClarifyAgentStartResult stays quiet on an old host when disabled or bypassed",
+      name: "buildClarifyAgentStartResult: stays quiet on a host with no messageType when nothing needs injecting",
       run: () => {
-        const options = { selectedTools: ["clarify_prompt"] };
-        const disabled = buildClarifyAgentStartResult({
-          enabled: false,
-          bypassForThisTurn: false,
-          systemPromptOptions: options,
-          isVague: false,
-        });
-        const bypassed = buildClarifyAgentStartResult({
-          enabled: true,
-          bypassForThisTurn: true,
-          systemPromptOptions: options,
-          isVague: false,
-        });
-        if (disabled !== null || bypassed !== null) {
+        // Audit: protects the guard's position after the early returns. Regression:
+        // hoisting it above them throws on a disabled, bypassed, or tool-scoped-out
+        // turn, turning an intentionally idle turn into a visible per-turn error.
+        // Coverage gap: the throwing test only covers the inject path. No production
+        // seam: same builder, and each call below omits messageType deliberately.
+        const quiet = [
+          buildClarifyAgentStartResult({
+            enabled: false,
+            bypassForThisTurn: false,
+            systemPromptOptions: { selectedTools: ["clarify_prompt"], sections: {} },
+            isVague: false,
+          }),
+          buildClarifyAgentStartResult({
+            enabled: true,
+            bypassForThisTurn: true,
+            systemPromptOptions: { selectedTools: ["clarify_prompt"], sections: {} },
+            isVague: false,
+          }),
+          buildClarifyAgentStartResult({
+            enabled: true,
+            bypassForThisTurn: false,
+            systemPromptOptions: { selectedTools: ["read", "bash"], sections: {} },
+            isVague: false,
+          }),
+        ];
+        if (quiet.some((result) => result !== null)) {
           throw new Error("Expected no result, and no capability error, when nothing needs injecting");
         }
       },
