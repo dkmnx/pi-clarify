@@ -7,14 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.0] - 2026-10-31
+
 ### Changed
 
-- **[BREAKING]:** Requires pi 1.2.0 or newer. pi 1.2.0 split `before_agent_start` into a union on `messageType`, and the extension reads that field to tell a user prompt from an extension message. A host that omits it gets the named error in the README instead of a silent per-turn failure. The `typeof event.prompt === "string"` guard, which let one code path compile against both event shapes, is gone. The exported `ClarifyPromptOptions` now requires `sections`, which every supported host provides.
-- Development now targets pi 1.4.0 through `devDependencies`, so `npm run typecheck` compiles against the released host instead of 1.0.2. The runtime floor is pi 1.2.0.
+- **[BREAKING]:** Requires pi 1.2.0 or newer. The extension reads `messageType` on `before_agent_start` to tell a user prompt from an extension message. An older host sends no such field, so the extension stops with a named error instead of guessing which kind of turn it received.
+- `ClarifyPromptOptions.sections` is now required, which every supported host provides.
 
 ### Fixed
 
-- The per-result network reminder fires in every mode with a dialog-capable UI, including RPC. It previously required TUI mode, so an RPC client received the `NETWORK_ISSUE_PROMPT` section but no nudge on the failed tool result itself.
+- The network reminder reaches RPC clients. It required TUI mode before, so an RPC session received the `NETWORK_ISSUE_PROMPT` section but no reminder on the failed tool result.
 
 ## [v0.4.2] - 2026-10-18
 
@@ -142,7 +144,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/clarify` toggle command.
 - `!` bypass prefix.
 
-[Unreleased]: https://github.com/dkmnx/pi-clarify/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/dkmnx/pi-clarify/compare/v0.5.0...HEAD
+[v0.5.0]: https://github.com/dkmnx/pi-clarify/compare/v0.4.2...v0.5.0
 [v0.4.2]: https://github.com/dkmnx/pi-clarify/compare/v0.4.1...v0.4.2
 [v0.4.1]: https://github.com/dkmnx/pi-clarify/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/dkmnx/pi-clarify/compare/v0.3.0...v0.4.0
