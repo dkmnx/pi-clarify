@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **[BREAKING]:** Requires pi 1.2.0 or newer. pi 1.2.0 split `before_agent_start` into a union on `messageType`, and the extension reads that field to tell a user prompt from an extension message. A host that omits it gets the named error in the README instead of a silent per-turn failure. The `typeof event.prompt === "string"` guard, which let one code path compile against both event shapes, is gone. The exported `ClarifyPromptOptions` now requires `sections`, which every supported host provides.
+- Development now targets pi 1.4.0 through `devDependencies`, so `npm run typecheck` compiles against the released host instead of 1.0.2. The runtime floor is pi 1.2.0.
+
+### Fixed
+
+- The per-result network reminder fires in every mode with a dialog-capable UI, including RPC. It previously required TUI mode, so an RPC client received the `NETWORK_ISSUE_PROMPT` section but no nudge on the failed tool result itself.
+
 ## [v0.4.2] - 2026-10-18
 
 ### Fixed

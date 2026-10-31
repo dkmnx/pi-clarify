@@ -42,12 +42,15 @@ included file imports it.
 - Never return `systemPrompt` from `before_agent_start`. It sets `forceSystemPrompt`, and pi's
   `buildSystemPromptState` then drops every structured section and replaces the prompt wholesale.
   Write into `systemPromptOptions.sections.clarify` so pi records a transcript delta.
-- The extension needs pi `1.0.0` or newer. `MIN_PI_VERSION` and `assertPromptSectionsSupported`
-  guard the one field older hosts lack: writing to `systemPromptOptions.sections` unguarded raises
-  a bare `TypeError` that pi's runner swallows, leaving clarification dead on a session that still
-  looks healthy.
+- The extension needs pi `1.2.0` or newer. `MIN_PI_VERSION` and `assertHostSupported` probe
+  `messageType` on the `before_agent_start` event; a host that omits it gets a named error instead of
+  a silent per-turn failure. One probe covers the whole floor: `messageType` implies
+  `systemPromptOptions.sections`, because sections arrived in pi 1.0.0 and the union in 1.2.0.
 - Prompt section names must match `/^[a-z][a-z0-9_-]*$/` and must not be `preamble`. pi throws on
   anything else outside the runner's try/catch, which breaks every user turn.
+- `before_agent_start` reads the prompt through the `messageType` union:
+  `event.messageType === "user" && isVagueInput(event.prompt)`. The short circuit means a
+  custom-message turn never touches `event.prompt`, which it does not carry.
 - Keep `clarify_prompt` at `exposure: "model-only"`. The `direct` default lets any other tool invoke
   it through `ctx.executeTool()` and open a blocking modal.
 - A `tool_result` patch that replaces `content` must echo `structuredContent` back: pi deletes it
@@ -56,8 +59,10 @@ included file imports it.
 - The three host packages are declared twice, deliberately. `peerDependencies` uses `"*"` so the
   host's copy wins over a nested duplicate and the extension ships no runtime dependency of its own;
   `devDependencies` pins what local `npm run typecheck` and `npm run test:e2e` compile and run
-  against (pi at `^1.0.0`, typebox at `^1.3.7`). The `"*"` range does not enforce the pi floor, so
-  a stale host is caught at runtime instead.
+  against (pi at `^1.4.0`, typebox at `^1.3.7`). The `"*"` range does not enforce the pi floor, so
+  a stale host is caught at runtime instead. Keep the devDependency on the released host. Pinned at
+  1.0.2, it hid pi 1.2.0's `BeforeAgentStartEvent` union, and the type check passed on a host three
+  minors behind.
 - Network detection rejects bare words. `timeout`, `network`, `proxy` and `quota` match only with a
   qualifier attached, because they occur constantly in unrelated failures. A bare HTTP status counts
   only when the line is essentially just a status or is introduced by an explicit status word, which
@@ -68,7 +73,9 @@ included file imports it.
   section for work that has not shipped.
 - In `e2e.test.ts`, `ExtensionRunner` swallows handler exceptions and surfaces them only through
   `runner.onError`. A new assertion that skips the existing `runtimeErrors` guard stays green while
-  the extension is broken. TUI-gated paths need `runner.setUIContext(uiStub(), "tui")`.
+  the extension is broken. `emitBeforeAgentStart` takes a trigger object, not a prompt string.
+  Dialog paths need `runner.setUIContext(uiStub(), "tui")`. The `tool_result` path is gated on
+  `ctx.hasUI` alone, so cover it in `"rpc"` mode as well.
 
 ## Code style
 

@@ -14,9 +14,9 @@ Prompt clarification extension for [pi coding agent](https://github.com/earendil
 
 ## Requirements
 
-pi `1.0.0` or newer. The extension injects its instructions as a structured system-prompt section and registers `clarify_prompt` with `exposure: "model-only"`, both of which require pi 1.0.0.
+pi `1.2.0` or newer. pi 1.2.0 split `before_agent_start` into a union on `messageType`, and the extension reads that field to tell a user prompt from an extension message.
 
-On an older host the extension reports `pi-clarify requires pi 1.0.0 or newer` once per turn instead of failing silently, so a stale host is obvious rather than leaving clarification quietly disabled.
+On an older host the extension reports `pi-clarify requires pi 1.2.0 or newer: this host sends no messageType on before_agent_start, so clarification cannot tell a user prompt from an extension message. Upgrade pi to continue using this extension.` once per turn instead of failing silently, so a stale host is obvious rather than leaving clarification quietly disabled.
 
 ## Installation
 
@@ -83,7 +83,7 @@ Prefix your prompt with `~` to skip clarification for one turn:
 
 > `~` is used instead of `!` because pi reserves `!`/`!!` as the built-in shell-command prefix.
 >
-> A prompt starting `~/…` or `~user/…` is a home-relative path, not a bypass marker, so it passes through untouched. A tilde followed by whitespace is always the marker, so `~ /etc/hosts` bypasses like any other `~ ` prompt.
+> A tilde that does not start a path is the marker, so `~ fix it` and `~fix it` both bypass. A prompt starting `~/…` or `~user/…` is a home-relative path, not a marker, so it passes through untouched.
 
 ### Network / proxy issue handling
 
@@ -97,7 +97,7 @@ When a tool call fails with a network, proxy, connectivity, or rate-limit error 
    - "Use a fallback approach / different tool"
    - "Skip this step and continue"
 
-This behavior is governed by the same `/clarify` toggle and is disabled for RPC/print mode (no interactive UI).
+Both parts are governed by the same `/clarify` toggle. The system-prompt guideline is injected in every mode. The per-result reminder needs a dialog-capable UI, so it stays inactive in print and JSON mode.
 
 ## How vague input is detected
 
